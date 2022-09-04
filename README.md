@@ -33,4 +33,4 @@ Serverless infrastructure:
 - [A Survey on Federated Learning and its Applications for Accelerating Industrial Internet of Things](https://arxiv.org/pdf/2104.10501.pdf)
 - [Exploiting Unlabeled Data in Smart Cities using Federated Edge Learning](https://arxiv.org/pdf/2001.04030.pdf)
 - [On-device federated learning with Flower](https://arxiv.org/pdf/2104.03042.pdf)
-- [Flower: A Friendly Federated Learning Research Framework](https://arxiv.org/pdf/2007.14390.pdf)
+- [Flower: A Friendly Federated Learning Framework](https://arxiv.org/pdf/2007.14390.pdf)
