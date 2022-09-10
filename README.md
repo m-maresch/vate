@@ -1,14 +1,28 @@
 # Title (WIP)
 
+Initial:
 Distributed inference (or/and learning) for an object detection use case on the edge, leveraging serverless technology.
 
 Using Raspberry Pis, AWS resources, Kubernetes and TensorFlow.
 
+Current iteration:
+Federated learning for an object detection use case on the edge with serverless containers for model serving.
+
 ## Topic
+
+Serverless edge computing focused on FaaS and artificial intelligence don't go well together:
+- AI processing (training, testing): Involves long-running tasks and is IO-intensive at the edge [6]
+- Serverless functions: Are short-running functions, CPU-bound
+
+There is a mismatch. [5]
+
+When talking about serverless, we're referring to not having to manage servers, not FaaS. Specifically serverless containers will be evaluated, as they are suitable for long running tasks as well.
 
 ## Product
 
 ## System Design
+
+Centralized federated learning will be done, thus there is a server for orchestration and coordination.
 
 On Kubernetes-based edge architecture: See [this](https://www.lfedge.org/2021/02/11/kubernetes-is-paving-the-path-for-edge-computing-adoption/)
 
@@ -17,7 +31,9 @@ On Kubernetes-based edge architecture: See [this](https://www.lfedge.org/2021/02
  - Control plane in cloud, manages edge nodes (can be done using KubeEdge)
  - Virtual kubelets: Cloud contains abstract of edge nodes/pods
 
-Depends on the Use Case what is the most appropriate.
+Depends on the Use Case what is the most appropriate, e.g.:
+- MicroK8s + Knative when only edge is needed or cloud and edge are mostly independant
+- KubeEdge when cloud and edge are needed and edge depends on cloud
 
 Alternative to Kubernetes-based edge architectures: Using AWS exclusively, see [here](https://aws.amazon.com/blogs/architecture/applying-federated-learning-for-ml-at-the-edge/) for a federated learning at the edge example.
 
@@ -36,7 +52,7 @@ Various solutions:
 Federated learning
 - TensorFlow Federated: No multi-machine support, only for simulations
 - PySyft: OK
-- Flower: OK, seems to be the simplest option for our scenario, was made with exactly this in mind (see the Flower paper)
+- Flower: OK, seems to be the simplest option for our scenario, was made with exactly this in mind (see [4])
 
 Kubernetes for edge:
 - K3s: OK, would involve edge only, no serverless infrastructure out of the box
@@ -50,7 +66,9 @@ Serverless infrastructure:
 - Knative: OK, see above
 
 ## Related research
-- [A Survey on Federated Learning and its Applications for Accelerating Industrial Internet of Things](https://arxiv.org/pdf/2104.10501.pdf)
-- [Exploiting Unlabeled Data in Smart Cities using Federated Edge Learning](https://arxiv.org/pdf/2001.04030.pdf)
-- [On-device federated learning with Flower](https://arxiv.org/pdf/2104.03042.pdf)
-- [Flower: A Friendly Federated Learning Framework](https://arxiv.org/pdf/2007.14390.pdf)
+1. [A Survey on Federated Learning and its Applications for Accelerating Industrial Internet of Things](https://arxiv.org/pdf/2104.10501.pdf)
+2. [Exploiting Unlabeled Data in Smart Cities using Federated Edge Learning](https://arxiv.org/pdf/2001.04030.pdf)
+3. [On-device federated learning with Flower](https://arxiv.org/pdf/2104.03042.pdf)
+4. [Flower: A Friendly Federated Learning Framework](https://arxiv.org/pdf/2007.14390.pdf)
+5. [Serverless Edge Computing: Vision and Challenges](https://dsg.tuwien.ac.at/team/sd/papers/AusPDC_2021_SD_Serverless.pdf)
+6. [Serverless Computing: One Step Forward, Two Steps Back](https://arxiv.org/pdf/1812.03651.pdf)
