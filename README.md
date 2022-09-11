@@ -10,6 +10,21 @@ Federated learning for an object detection use case on the edge with serverless 
 
 ## Topic
 
+From edge computing we have devices and edge servers along with potentially the cloud. For centralized federated learning we have a single server per model. This results in 2 possible variants for the system architecture which can be implemented:
+- Variant 1: One model for the whole system, implies that
+    - One FL server running in the cloud
+    - Devices communicate with edge server
+    - Edge server aggregates data from devices
+    - Edge server participates in FL
+    - Model is deployed in the cloud (or same model on every edge server)
+- Variant 2: One model per edge server, implies that
+    - One FL server running at every edge server
+    - Devices participate in FL
+    - Models are deployed at the edge servers
+    - Cloud might not be used at all
+    
+Each variant is suitable for different Use Cases.
+
 Serverless edge computing focused on FaaS and artificial intelligence don't go well together:
 - AI processing (training, testing): Involves long-running tasks and is IO-intensive at the edge [6]
 - Serverless functions: Are short-running functions, CPU-bound
