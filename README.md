@@ -5,8 +5,28 @@ Distributed inference (or/and learning) for an object detection use case on the 
 
 Using Raspberry Pis, AWS resources, Kubernetes and TensorFlow.
 
-Current iteration:
+Iteration #1:
 Federated learning for an object detection use case on the edge with serverless containers for model serving.
+
+Current iteration (#2):
+Serverless containers for integrating and serving deep learning models at the edge.
+- Using Knative and K3s/MicroK8s for connecting devices with their edge server
+- Serving deep learning models on the edge server
+
+Problems with:
+- Distributed inference at the edge
+    - Based on existing, state of the art architectures:
+        - For agriculture, production sites: devices with connection to edge server (on-site)
+        - For connected cars: cars with connection to edge infrastructure (MEC)
+    - If the devices are too weak to do the inference themselves then they most likely have a edge server available to them which is capable of doing the inference. (e.g. agriculture, production sites)
+    - Otherwise they likely do have the capability to do the inference themselves. (e.g. connected cars)
+    - Not a lot of use cases where this does not hold.
+- Federated learning at the edge: Not a lot of use cases, as you need all of:
+    - Data cannot be shared for some reason
+    - Data is generated locally
+    - The participants can agree on the data format used (for our FL scenario)
+    - The participants are sufficently powerful to train a model
+    - The statistical challenges of FL are not a blocker
 
 ## Topic
 
