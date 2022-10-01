@@ -8,10 +8,18 @@ Using Raspberry Pis, AWS resources, Kubernetes and TensorFlow.
 Iteration #1:
 Federated learning for an object detection use case on the edge with serverless containers for model serving.
 
-Current iteration (#2):
+Iteration (#2):
 Serverless containers for integrating and serving deep learning models at the edge.
 - Using Knative and K3s/MicroK8s for connecting devices with their edge server
 - Serving deep learning models on the edge server
+
+Iteration (#3):
+Semantic segmentation on edge containers for smart factories
+- Serving a deep learning model on an Nvidia Jetson Nano
+- Using two Raspberry Pis with cameras which capture video streams
+- These connect to an Nvidia Jetson Nano where semantic segmentation on the video streams is done
+- Using K3s/MicroK8s for edge containers
+- Web-App where one can see the live video stream and the semantic segmentation results per device/Raspberry Pi with camera
 
 Problems with:
 - Distributed inference at the edge
