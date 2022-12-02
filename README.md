@@ -21,6 +21,16 @@ Semantic segmentation on edge containers for smart factories
 - Using K3s/MicroK8s for edge containers
 - Web-App where one can see the live video stream and the semantic segmentation results per device/Raspberry Pi with camera
 
+Iteration (#4):
+Building edge intelligence using stream processing
+- Using two Raspberry Pis with cameras which capture video streams
+- These connect to a more powerful machine (e.g. a laptop) in the local network where semantic segmentation on the video streams is done
+- Raspberry Pis + laptop represent an edge site
+- Using Python, Kubernetes, NATS, TensorFlow/PyTorch
+- Web-App on edge site where one can see the live video stream and the semantic segmentation results per device/Raspberry Pi with camera
+- Extension #1: System manager application runs in the cloud, used to manage edge sites, samples data from all edge sites and enables further stream processing in the cloud
+- Extension #2: Compare technologies which can be used for edge stream processing, e.g. Kafka vs NATS vs Pulsar ...
+
 Problems with:
 - Distributed inference at the edge
     - Based on existing, state of the art architectures:
