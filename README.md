@@ -31,6 +31,26 @@ Building edge intelligence using stream processing
 - Extension #1: System manager application runs in the cloud, used to manage edge sites, samples data from all edge sites and enables further stream processing in the cloud
 - Extension #2: Compare technologies which can be used for edge stream processing, e.g. Kafka vs NATS vs Pulsar ...
 
+Iteration (#5):
+On semantic segmentation in smart cities and factories leveraging edge stream processing
+- Using two Raspberry Pis with cameras which capture video streams
+    - Raspberry Pis act as IP cameras
+- A more powerful machine (e.g. a laptop) in the local network connects to these Raspberry Pis and does semantic segmentation on (parts of) the video streams
+- Laptop represents e.g. a server in a smart factory (edge-site) or a on-site server of a smart city. Focus is on the latter scenario.
+- Web-App where one can see the live video stream and the semantic segmentation results per device/Raspberry Pi with camera
+- Semantic segmentation model(s) are trained using the [Cityscapes Dataset](https://www.cityscapes-dataset.com/), e.g. for car or pedestrian segmentation
+    - See potential models [here](https://paperswithcode.com/sota/real-time-semantic-segmentation-on-cityscapes)
+- Implementation
+    - Using JavaScript (Frontend), Python (Backend), maybe Java (Backend, for certain components), Kubernetes, Kafka/NATS/Pulsar/..., TensorFlow/PyTorch
+    - The video streams are made available using RTSP (see [this](https://github.com/mpromonet/v4l2rtspserver))
+    - A server accesses the frames of these video streams via RTSP and forwards the frames for stream processing.
+    - Stream processing applications can act on the frames (e.g. preprocess frames, do semantic segmentation) and output results/publish events
+    - The Web-App visualizes the results/events and allows direct access to the video streams via RTSP (conversion may be needed for the Web)
+- A concrete application: Automatically detecting and warning pedestrians entering subway stations with bikes during hours where bikes in subways are not allowed
+- Potential Extensions
+    1. Compare technologies which can be used for edge stream processing, e.g. Kafka vs NATS vs Pulsar ...
+    2. System manager application runs in the cloud, used to manage on-site servers, samples data from all on-site servers and enables further stream processing in the cloud
+
 Problems with:
 - Distributed inference at the edge
     - Based on existing, state of the art architectures:
