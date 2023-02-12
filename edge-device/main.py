@@ -1,6 +1,7 @@
 import argparse
 import cv2 as cv
 import requests
+import uuid
 
 
 def main(path):
@@ -20,9 +21,11 @@ def main(path):
 
         if frame_count % detection_rate == 0:
             encoded = cv.imencode(".jpg", frame)[1]
-            file = {'file': ('frame.jpg', encoded.tobytes(), 'image/jpeg')}
-            data = {"id": "1234"}
-            response = requests.post("http://127.0.0.1/detect/", files=file, data=data, timeout=5)
+            frame_id = str(uuid.uuid4())
+            file = {'file': (f'{frame_id}.jpg', encoded.tobytes(), 'image/jpeg')}
+            data = {"id": f"{frame_id}"}
+            response = requests.post("http://127.0.0.1:8000/detection", files=file, data=data, timeout=5)
+            print(response.json())
             bounding_box = 0
 
         # Operations on the frame here
