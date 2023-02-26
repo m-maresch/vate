@@ -12,6 +12,7 @@ def main(path):
 
     frame_count = 0
     detection_rate = 5
+    displayed_detections = []
     while True:
         ret, frame = capture.read()
         if not ret:
@@ -25,11 +26,21 @@ def main(path):
             file = {'file': (f'{frame_id}.jpg', encoded.tobytes(), 'image/jpeg')}
             data = {"id": f"{frame_id}"}
             response = requests.post("http://127.0.0.1:8000/detection", files=file, data=data, timeout=5)
-            print(response.json())
-            bounding_box = 0
+            body = response.json()
+            print(f"Got: {body}")
+            displayed_detections = []
+            detections = body['detections']
+            for detection in detections:
+                bbox = detection['bbox']
+                x = int(bbox[0])
+                y = int(bbox[1])
+                w = int(bbox[2])
+                h = int(bbox[3])
+                displayed_detections.append((x, y, w, h))
 
         # Operations on the frame here
-        cv.rectangle(frame, (20, 20), (500, 200), (255, 0, 0), 3)
+        for (x, y, w, h) in displayed_detections:
+            cv.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 3)
 
         cv.imshow('frame', frame)
         if cv.waitKey(1) == ord('q'):
