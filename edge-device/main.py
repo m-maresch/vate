@@ -4,8 +4,10 @@ import json
 import requests
 import uuid
 import time
-import torch
-from torchmetrics.detection.mean_ap import MeanAveragePrecision
+import glob
+
+from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval
 
 font = cv.FONT_HERSHEY_SIMPLEX
 
@@ -22,16 +24,22 @@ categories = [
     {"id": 9, "name": "motor"}
 ]
 
+metrics = ['mAP', 'mAP_50', 'mAP_75', 'mAP_s', 'mAP_m', 'mAP_l']
+metric_to_coco_id = {
+    'mAP': 0,
+    'mAP_50': 1,
+    'mAP_75': 2,
+    'mAP_s': 3,
+    'mAP_m': 4,
+    'mAP_l': 5,
+}
+
 
 def main(video, annotations_path):
-    capture = cv.VideoCapture(video)
-    if not capture.isOpened():
-        print("Cannot open capture")
-        exit()
-
-    annotations = []
+    images = []
+    annotations = dict()
     if _annotations_available(video, annotations_path):
-        annotations = _load_annotations(video, annotations_path)
+        (images, annotations) = _load_annotations(video, annotations_path)
 
     frame_count = 0
     tracker_failures = 0
@@ -43,28 +51,31 @@ def main(video, annotations_path):
     trackers = []
 
     prev_frame_at = 0
+
+    frames = _frames(video, images)
     while True:
-        ret, frame = capture.read()
-        if not ret:
-            print("Cannot receive frame")
+        next_frame = next(frames)
+        frame_id = next_frame['id']
+        if frame_id == -1:
             break
+        frame = next_frame['data']
 
         if frame_count % detection_rate == 0:
             detections_to_display = []
             trackers = []
-            detections = _detect_objects(frame)
+            detections = _detect_objects(frame_id, frame)
             for detection in detections:
                 (bbox, score, category) = _to_bbox_score_category(detection)
                 (x, y, w, h) = bbox
-                all_detections.append((x, y, w, h, score, category, False))
+                all_detections.append((frame_id, x, y, w, h, score, category, False))
                 if _is_significant(score):
-                    detections_to_display.append((x, y, w, h, score, category, False))
+                    detections_to_display.append((frame_id, x, y, w, h, score, category, False))
 
                     tracker = _create_single_tracker()
                     tracker.init(frame, bbox)
                     trackers.append((tracker, score, category))
         else:
-            tracking_result = _track_objects(trackers, frame)
+            tracking_result = _track_objects(trackers, frame_id, frame)
             if not tracking_result:
                 tracker_failures += 1
 
@@ -79,8 +90,8 @@ def main(video, annotations_path):
         for detection in detections_to_display:
             _display(frame, detection)
 
-        if _annotations_available(video, annotations_path) and frame_count < len(annotations):
-            for annotation in annotations[frame_count]:
+        if _annotations_available(video, annotations_path):
+            for annotation in annotations[frame_id]:
                 (x, y, w, h) = annotation['bbox']
                 all_annotations.append((x, y, w, h, annotation['category_id']))
                 _display_annotation(frame, (x, y, w, h, annotation['category_id']))
@@ -92,16 +103,41 @@ def main(video, annotations_path):
             break
 
     if _annotations_available(video, annotations_path):
-        _compute_map(all_detections, all_annotations)
+        _evaluate_detections(all_detections, annotations_path)
 
-    capture.release()
     cv.destroyAllWindows()
     print(f"{tracker_failures} tracker failures")
 
 
-def _detect_objects(frame):
+def _frames(video, images):
+    if video == 0:
+        capture = cv.VideoCapture(video)
+        if not capture.isOpened():
+            print("Cannot open capture")
+            exit()
+
+        while True:
+            frame_id = str(uuid.uuid4())
+            ret, data = capture.read()
+            if not ret:
+                print("Cannot receive frame")
+                capture.release()
+                yield {'id': -1, 'data': -1}
+            yield {'id': frame_id, 'data': data}
+    else:
+        frame_id = 0
+        for file in sorted(glob.glob(video)):
+            if len(images) > 0:
+                frame_id = next(filter(lambda img: file.endswith(img['file_name']), images))['id']
+            else:
+                frame_id = frame_id + 1
+            data = cv.imread(file)
+            yield {'id': frame_id, 'data': data}
+        yield {'id': -1, 'data': -1}
+
+
+def _detect_objects(frame_id, frame):
     encoded = cv.imencode(".jpg", frame)[1]
-    frame_id = str(uuid.uuid4())
     file = {'file': (f'{frame_id}.jpg', encoded.tobytes(), 'image/jpeg')}
     data = {"id": f"{frame_id}"}
     response = requests.post("http://127.0.0.1:8000/detection", files=file, data=data, timeout=5)
@@ -133,27 +169,27 @@ def _load_annotations(video, annotations_path):
         images_sorted = sorted(images, key=lambda i: i['file_name'])
         image_ids = [image['id'] for image in images_sorted]
 
-        annotations = []
+        annotations = dict()
         for image_id in image_ids:
             image_annotations = [annotation for annotation in annotations_json['annotations']
                                  if annotation['image_id'] == image_id]
-            annotations.append(image_annotations)
-        return annotations
+            annotations[image_id] = image_annotations
+        return images_sorted, annotations
 
 
-def _track_objects(trackers, frame):
+def _track_objects(trackers, frame_id, frame):
     result = []
     for (tracker, score, category) in trackers:
         ok, bbox = tracker.update(frame)
         if ok:
             (x, y, w, h) = map(int, bbox)
-            result.append((x, y, w, h, score, category, True))
+            result.append((frame_id, x, y, w, h, score, category, True))
 
     return result
 
 
 def _display(frame, detection):
-    (x, y, w, h, score, category_id, tracked) = detection
+    (_, x, y, w, h, score, category_id, tracked) = detection
     if not tracked:
         category_name = _category_name(category_id)
         cv.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 3)
@@ -178,49 +214,36 @@ def _create_single_tracker():
     return cv.legacy.TrackerKCF_create()
 
 
-def _compute_map(detections, annotations):
+def _evaluate_detections(detections, annotations_path):
     preds = [
         dict(
-            index=ind,
-            boxes=[[x, y, w, h]],
-            scores=[score],
-            labels=[category_id]
-        ) for ind, (x, y, w, h, score, category_id, _) in enumerate(detections)
+            image_id=frame_id,
+            bbox=[x, y, w, h],
+            score=score,
+            category_id=category_id
+        ) for (frame_id, x, y, w, h, score, category_id, _) in detections
     ]
 
-    target = [
-        dict(
-            boxes=torch.tensor([[x, y, w, h]]),
-            labels=torch.tensor([category_id]),
-        ) for (x, y, w, h, category_id) in annotations
-    ]
+    img_ids_start = preds[0]['image_id']
+    img_ids_end = preds[-1]['image_id']
 
-    diff = len(preds) - len(target)
-    if diff > 0:
-        sorted_preds = sorted(preds, key=lambda pred: pred['scores'])
-        worst_preds = sorted_preds[:diff]
-        worst_pred_ids = [worst_pred['index'] for worst_pred in worst_preds]
-        preds = [
-            dict(
-                boxes=torch.tensor(pred['boxes']),
-                scores=torch.tensor(pred['scores']),
-                labels=torch.tensor(pred['labels'])
-            ) for pred in preds if pred['index'] not in worst_pred_ids
-        ]
-    if diff < 0:
-        for _ in range(abs(diff)):
-            preds.append(
-                dict(
-                    boxes=torch.tensor([[0, 0, 0, 0]]),
-                    scores=torch.tensor([0]),
-                    labels=torch.tensor([10])
-                )
-            )
+    coco_gt = COCO(annotations_path)
+    coco_dt = coco_gt.loadRes(preds)
+    coco_eval = COCOeval(coco_gt, coco_dt, 'bbox')
+    coco_eval.params.catIds = list(range(0, 10))
+    coco_eval.params.imgIds = list(range(img_ids_start, img_ids_end + 1))
+    coco_eval.params.maxDets = [100, 500, 1000]
 
-    metric = MeanAveragePrecision(box_format='xywh')
-    metric.update(preds, target)
-    computed = metric.compute()
-    print(computed)
+    coco_eval.evaluate()
+    coco_eval.accumulate()
+    coco_eval.summarize()
+
+    eval_results = dict()
+    for metric in metrics:
+        coco_id = metric_to_coco_id[metric]
+        stat = coco_eval.stats[coco_id]
+        eval_results[metric] = float(f'{stat:.4f}')
+    print(f'Bounding box evaluation results: {eval_results}')
 
 
 if __name__ == '__main__':
