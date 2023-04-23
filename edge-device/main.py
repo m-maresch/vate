@@ -140,7 +140,7 @@ def _detect_objects(frame_id, frame):
     encoded = cv.imencode(".jpg", frame)[1]
     file = {'file': (f'{frame_id}.jpg', encoded.tobytes(), 'image/jpeg')}
     data = {"id": f"{frame_id}"}
-    response = requests.post("http://127.0.0.1:8000/detection", files=file, data=data, timeout=5)
+    response = requests.post("http://127.0.0.1:8000/detection", files=file, data=data, timeout=25)
     body = response.json()
     print(f"Got: {body}")
     return body
@@ -255,7 +255,9 @@ def _evaluate_detections(detections, annotations_path):
 
 
 def _color(det_type):
-    return (255, 0, 0) if det_type == "edge" else (0, 0, 0)
+    return (255, 0, 0) if det_type == "edge" \
+        else (0, 0, 255) if det_type == "cloud" \
+        else (0, 0, 0)
 
 
 def _color_tracked():
