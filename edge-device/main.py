@@ -46,7 +46,6 @@ def main(video, annotations_path):
     detection_rate = 6
 
     all_detections = []
-    all_annotations = []
     detections_to_display = []
     trackers = []
 
@@ -63,17 +62,19 @@ def main(video, annotations_path):
         if frame_count % detection_rate == 0:
             detections_to_display = []
             trackers = []
-            detections = _detect_objects(frame_id, frame)
+            det_response = _detect_objects(frame_id, frame)
+            det_type = det_response['type']
+            detections = det_response['detections']
             for detection in detections:
                 (bbox, score, category) = _to_bbox_score_category(detection)
                 (x, y, w, h) = bbox
-                all_detections.append((frame_id, x, y, w, h, score, category, False))
+                all_detections.append((frame_id, x, y, w, h, score, category, det_type, False))
                 if _is_significant(score):
-                    detections_to_display.append((frame_id, x, y, w, h, score, category, False))
+                    detections_to_display.append((frame_id, x, y, w, h, score, category, det_type, False))
 
                     tracker = _create_single_tracker()
                     tracker.init(frame, bbox)
-                    trackers.append((tracker, score, category))
+                    trackers.append((tracker, score, category, det_type))
         else:
             tracking_result = _track_objects(trackers, frame_id, frame)
             if not tracking_result:
@@ -93,7 +94,6 @@ def main(video, annotations_path):
         if _annotations_available(video, annotations_path):
             for annotation in annotations[frame_id]:
                 (x, y, w, h) = annotation['bbox']
-                all_annotations.append((x, y, w, h, annotation['category_id']))
                 _display_annotation(frame, (x, y, w, h, annotation['category_id']))
 
         cv.putText(frame, f"{fps} FPS", (50, 50), font, 0.8, (0, 255, 0), 2)
@@ -143,14 +143,14 @@ def _detect_objects(frame_id, frame):
     response = requests.post("http://127.0.0.1:8000/detection", files=file, data=data, timeout=5)
     body = response.json()
     print(f"Got: {body}")
-    return body['detections']
+    return body
 
 
 def _to_bbox_score_category(detection):
     bbox = detection['bbox']
     score = detection['score']
     category = detection['category']
-    return bbox, score, category
+    return bbox, score, _category_id(category)
 
 
 def _is_significant(score):
@@ -179,30 +179,38 @@ def _load_annotations(video, annotations_path):
 
 def _track_objects(trackers, frame_id, frame):
     result = []
-    for (tracker, score, category) in trackers:
+    for (tracker, score, category, det_type) in trackers:
         ok, bbox = tracker.update(frame)
         if ok:
             (x, y, w, h) = map(int, bbox)
-            result.append((frame_id, x, y, w, h, score, category, True))
+            result.append((frame_id, x, y, w, h, score, category, det_type, True))
 
     return result
 
 
 def _display(frame, detection):
-    (_, x, y, w, h, score, category_id, tracked) = detection
+    (_, x, y, w, h, score, category_id, det_type, tracked) = detection
     if not tracked:
         category_name = _category_name(category_id)
-        cv.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 3)
-        cv.putText(frame, f"{category_name} {score}%", (x, y - 10), font, 0.5, (255, 0, 0), 2)
+        color = _color(det_type)
+        cv.rectangle(frame, (x, y), (x + w, y + h), color, 3)
+        cv.putText(frame, f"{category_name} {score}%", (x, y - 10), font, 0.5, color, 2)
     else:
-        cv.rectangle(frame, (x, y), (x + w, y + h), (255, 180, 0), 2)
+        color = _color_tracked()
+        cv.rectangle(frame, (x, y), (x + w, y + h), color, 2)
 
 
 def _display_annotation(frame, annotation):
     (x, y, w, h, category_id) = annotation
     category_name = _category_name(category_id)
-    cv.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 1)
-    cv.putText(frame, f"{category_name}", (x, y - 10), font, 0.5, (0, 255, 0), 1)
+    color = _color_annotation()
+    cv.rectangle(frame, (x, y), (x + w, y + h), color, 1)
+    cv.putText(frame, f"{category_name}", (x, y - 10), font, 0.5, color, 1)
+
+
+def _category_id(category_name):
+    category = next(filter(lambda cat: cat["name"] == category_name, categories))
+    return category["id"]
 
 
 def _category_name(category_id):
@@ -215,20 +223,20 @@ def _create_single_tracker():
 
 
 def _evaluate_detections(detections, annotations_path):
-    preds = [
+    results = [
         dict(
             image_id=frame_id,
             bbox=[x, y, w, h],
             score=score,
             category_id=category_id
-        ) for (frame_id, x, y, w, h, score, category_id, _) in detections
+        ) for (frame_id, x, y, w, h, score, category_id, _, _) in detections
     ]
 
-    img_ids_start = preds[0]['image_id']
-    img_ids_end = preds[-1]['image_id']
+    img_ids_start = results[0]['image_id']
+    img_ids_end = results[-1]['image_id']
 
     coco_gt = COCO(annotations_path)
-    coco_dt = coco_gt.loadRes(preds)
+    coco_dt = coco_gt.loadRes(results)
     coco_eval = COCOeval(coco_gt, coco_dt, 'bbox')
     coco_eval.params.catIds = list(range(0, 10))
     coco_eval.params.imgIds = list(range(img_ids_start, img_ids_end + 1))
@@ -244,6 +252,18 @@ def _evaluate_detections(detections, annotations_path):
         stat = coco_eval.stats[coco_id]
         eval_results[metric] = float(f'{stat:.4f}')
     print(f'Bounding box evaluation results: {eval_results}')
+
+
+def _color(det_type):
+    return (255, 0, 0) if det_type == "edge" else (0, 0, 0)
+
+
+def _color_tracked():
+    return 255, 180, 0
+
+
+def _color_annotation():
+    return 0, 255, 0
 
 
 if __name__ == '__main__':
