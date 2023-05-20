@@ -36,12 +36,13 @@ async def detect(file: UploadFile, background_tasks: BackgroundTasks):
 
 
 def _detect_object(frame, background_tasks):
-    if random.randint(0, 100) > 10 and not in_progress:
+    if random.randint(0, 100) < 20 and not in_progress:
         background_tasks.add_task(_cloud_detect_objects, frame)
 
     edge_detections = _edge_detect_objects(frame)
     if last_cloud_detections:
-        cloud_detections = last_cloud_detections
+        cloud_detections = last_cloud_detections.copy()
+        last_cloud_detections.clear()
         return "cloud", _fuse_edge_cloud_detections(edge_detections, cloud_detections, "cloud")
     return "edge", _fuse_edge_cloud_detections(last_detections, edge_detections, "edge")
 
@@ -100,7 +101,7 @@ def _fuse_edge_cloud_detections(current_detections, new_detections, new_type):
             else:
                 M[i, j] = 0
 
-    current_ind, new_ind = linear_sum_assignment(M)
+    current_ind, new_ind = linear_sum_assignment(M, maximize=True)
     result = []
 
     for i, j in zip(current_ind, new_ind):
