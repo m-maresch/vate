@@ -1,6 +1,7 @@
 from typing import Union
 
 import cv2 as cv
+import glob
 import time
 
 from annotation import annotations_available, load_annotations
@@ -14,8 +15,6 @@ from track import MultiObjectTracker
 
 
 class EdgeDevice:
-    video: Union[str, None]
-    annotations_path: Union[str, None]
     detection_rate: int
     object_tracker: MultiObjectTracker
 
@@ -27,10 +26,7 @@ class EdgeDevice:
 
     tracker_failures: int
 
-    def __init__(self, video: Union[str, None], annotations_path: Union[str, None], detection_rate: int,
-                 object_tracker: MultiObjectTracker):
-        self.video = video
-        self.annotations_path = annotations_path
+    def __init__(self, detection_rate: int, object_tracker: MultiObjectTracker):
         self.detection_rate = detection_rate
         self.object_tracker = object_tracker
 
@@ -42,13 +38,49 @@ class EdgeDevice:
 
         self.tracker_failures = 0
 
-    def start(self):
+    def process(self, videos: Union[str, None], annotations_path: Union[str, None]):
+        items = []
+        multiple_videos = False
+
+        if videos is not None:
+            items = glob.glob(videos)
+        else:
+            self._process_camera()
+
+        if len(items) > 0:
+            if items[0].endswith(".jpg"):
+                video = videos
+                self._process_video(video, annotations_path)
+            else:
+                multiple_videos = True
+
+        if multiple_videos:
+            self._process_multiple_videos(videos, annotations_path)
+
+        if annotations_available(videos, annotations_path):
+            evaluate_detections(self.all_detections, annotations_path)
+
+        cv.destroyAllWindows()
+        print(f"{self.tracker_failures} tracker failures")
+
+    def _process_camera(self):
+        self._process_video(None, None)
+
+    def _process_multiple_videos(self, videos: str, annotations_path: Union[str, None]):
+        for video in glob.glob(videos):
+            self.detections_to_display = []
+            self.object_tracker.reset_objects()
+            self.frame_count = 0
+            self.prev_frame_at = 0
+            self._process_video(f"{video}/*", annotations_path)
+
+    def _process_video(self, video: Union[str, None], annotations_path: Union[str, None]):
         images: ImageList = []
         annotations: AnnotationsByImage = dict()
-        if annotations_available(self.video, self.annotations_path):
-            (images, annotations) = load_annotations(self.video, self.annotations_path)
+        if annotations_available(video, annotations_path):
+            (images, annotations) = load_annotations(video, annotations_path)
 
-        frames = get_frames(self.video, images)
+        frames = get_frames(video, images)
         while True:
             frame = next(frames)
             if frame.id == -1:
@@ -84,7 +116,7 @@ class EdgeDevice:
             for received_detection in self.detections_to_display:
                 display_detection(frame.data, received_detection)
 
-            if annotations_available(self.video, self.annotations_path):
+            if annotations_available(video, annotations_path):
                 for annotation in annotations[frame.id]:
                     display_annotation(frame.data, annotation)
 
@@ -93,9 +125,3 @@ class EdgeDevice:
             cv.imshow('frame', frame.data)
             if cv.waitKey(1) == ord('q'):
                 break
-
-        if annotations_available(self.video, self.annotations_path):
-            evaluate_detections(self.all_detections, self.annotations_path)
-
-        cv.destroyAllWindows()
-        print(f"{self.tracker_failures} tracker failures")

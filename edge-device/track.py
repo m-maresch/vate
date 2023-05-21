@@ -14,8 +14,11 @@ class MultiObjectTracker:
 
     def add_object(self, frame: Frame, detection: DetectionView):
         tracker = cv.legacy.TrackerKCF_create()
-        tracker.init(frame.data, [detection.x, detection.y, detection.w, detection.h])
-        self.trackers.append(TrackerRecord(tracker, detection.score, detection.category, detection.type))
+        try:
+            tracker.init(frame.data, [detection.x, detection.y, detection.w, detection.h])
+            self.trackers.append(TrackerRecord(tracker, detection.score, detection.category, detection.type))
+        except cv.error as e:
+            print(f"Failed to init a tracker: {e}")
 
     def track_objects(self, frame: Frame) -> list[DetectionView]:
         result = []
