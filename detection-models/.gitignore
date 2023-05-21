@@ -5,6 +5,8 @@ datasets/
 checkpoints/
 mmdetection/
 work_dirs/
+faster_rcnn_visdrone_model_store/
+mobilenetv2_ssd_visdrone_model_store/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
