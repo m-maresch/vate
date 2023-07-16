@@ -6,11 +6,11 @@ import time
 
 from annotation import annotations_available, load_annotations
 from category import to_category_id
-from detection import detect_objects
+from detection import detect_objects, frame_change_detected
 from display import display_detection, display_annotation, display_fps
 from evaluation import evaluate_detections
 from frame import get_frames
-from model import DetectionView, ImageList, AnnotationsByImage
+from model import DetectionView, ImageList, AnnotationsByImage, Frame
 from track import MultiObjectTracker
 
 
@@ -24,6 +24,7 @@ class EdgeDevice:
     all_detections: list[DetectionView]
     detections_to_display: list[DetectionView]
 
+    skipped_frames: int
     tracker_failures: int
 
     def __init__(self, detection_rate: int, object_tracker: MultiObjectTracker):
@@ -36,6 +37,7 @@ class EdgeDevice:
         self.all_detections = []
         self.detections_to_display = []
 
+        self.skipped_frames = 0
         self.tracker_failures = 0
 
     def process(self, videos: Union[str, None], annotations_path: Union[str, None]):
@@ -61,6 +63,7 @@ class EdgeDevice:
             evaluate_detections(self.all_detections, annotations_path)
 
         cv.destroyAllWindows()
+        print(f"{self.skipped_frames} frames skipped")
         print(f"{self.tracker_failures} tracker failures")
 
     def _process_camera(self):
@@ -80,13 +83,22 @@ class EdgeDevice:
         if annotations_available(video, annotations_path):
             (images, annotations) = load_annotations(video, annotations_path)
 
+        prev_frame: Union[Frame, None] = None
         frames = get_frames(video, images)
+
         while True:
             frame = next(frames)
             if frame.id == -1:
                 break
 
-            if self.frame_count % self.detection_rate == 0:
+            frame_changed = False
+            if prev_frame is not None:
+                frame_changed = frame_change_detected(frame, prev_frame)
+
+            if not frame_changed:
+                print('Skipping frame due to little object displacement')
+                self.skipped_frames += 1
+            elif self.frame_count % self.detection_rate == 0:
                 self.detections_to_display = []
                 self.object_tracker.reset_objects()
                 (det_type, detections) = detect_objects(frame)
@@ -99,7 +111,7 @@ class EdgeDevice:
                     self.detections_to_display.append(det_view)
 
                     self.object_tracker.add_object(frame, det_view)
-            else:
+            elif self.frame_count % 2 == 0:
                 tracking_result = self.object_tracker.track_objects(frame)
                 if not tracking_result:
                     self.tracker_failures += 1
@@ -112,6 +124,7 @@ class EdgeDevice:
             self.prev_frame_at = frame_at
 
             self.frame_count += 1
+            prev_frame = frame
 
             for received_detection in self.detections_to_display:
                 display_detection(frame.data, received_detection)

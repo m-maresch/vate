@@ -1,7 +1,18 @@
 import cv2 as cv
+import numpy as np
 import requests
 
 from model import Detection, DetectionType, Frame
+
+
+def frame_change_detected(frame: Frame, prev_frame: Frame) -> bool:
+    frame_gray = cv.cvtColor(frame.data, cv.COLOR_BGR2GRAY)
+    prev_frame_gray = cv.cvtColor(prev_frame.data, cv.COLOR_BGR2GRAY)
+    flow = cv.calcOpticalFlowFarneback(prev_frame_gray, frame_gray, flow=None,
+                                       pyr_scale=0.5, levels=3, winsize=15,
+                                       iterations=3, poly_n=5, poly_sigma=1.2, flags=0)
+    mag, _ = cv.cartToPolar(flow[..., 0], flow[..., 1])
+    return np.mean(mag) >= 0.1
 
 
 def detect_objects(frame: Frame) -> tuple[DetectionType, list[Detection]]:
