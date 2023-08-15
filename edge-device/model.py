@@ -13,6 +13,7 @@ class Image:
 class Frame:
     id: int
     data: Any
+    resized_data: Any
 
 
 class DetectionType(Enum):
@@ -24,7 +25,7 @@ class DetectionType(Enum):
 class Detection:
     category: str
     score: int
-    bbox: list[int]
+    bbox: list[float]
 
 
 @dataclass

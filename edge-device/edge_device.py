@@ -5,16 +5,19 @@ import glob
 import time
 
 from annotation import annotations_available, load_annotations
+from bbox import scale
 from category import to_category_id
 from detection import detect_objects, frame_change_detected
 from display import display_detection, display_annotation, display_fps
 from evaluation import evaluate_detections
 from frame import get_frames
-from model import DetectionView, ImageList, AnnotationsByImage, Frame
+from model import DetectionView, ImageList, AnnotationsByImage, Frame, Detection, DetectionType
 from track import MultiObjectTracker
 
 
 class EdgeDevice:
+    frame_processing_width: int
+    frame_processing_height: int
     detection_rate: int
     object_tracker: MultiObjectTracker
 
@@ -27,7 +30,10 @@ class EdgeDevice:
     skipped_frames: int
     tracker_failures: int
 
-    def __init__(self, detection_rate: int, object_tracker: MultiObjectTracker):
+    def __init__(self, frame_processing_width: int, frame_processing_height: int, detection_rate: int,
+                 object_tracker: MultiObjectTracker):
+        self.frame_processing_width = frame_processing_width
+        self.frame_processing_height = frame_processing_height
         self.detection_rate = detection_rate
         self.object_tracker = object_tracker
 
@@ -84,40 +90,45 @@ class EdgeDevice:
             (images, annotations) = load_annotations(video, annotations_path)
 
         prev_frame: Union[Frame, None] = None
-        frames = get_frames(video, images)
+        frames = get_frames(video, images, self.frame_processing_width, self.frame_processing_height)
 
         while True:
             frame = next(frames)
             if frame.id == -1:
                 break
 
+            frame_height, frame_width, _ = frame.data.shape
+            frame_width_scale = frame_width / self.frame_processing_width
+            frame_height_scale = frame_height / self.frame_processing_height
+
             frame_changed = True
             if prev_frame is not None:
                 frame_changed = frame_change_detected(frame, prev_frame)
 
             if not frame_changed:
-                print('Skipping frame due to little object displacement')
+                print('Skipping frame due to no changes')
                 self.skipped_frames += 1
             elif self.frame_count % self.detection_rate == 0:
                 self.detections_to_display = []
                 self.object_tracker.reset_objects()
                 (det_type, detections) = detect_objects(frame)
                 for detection in detections:
-                    (x, y, w, h) = detection.bbox
-                    category_id = to_category_id(detection.category)
-                    det_view = DetectionView(frame.id, x, y, w, h, detection.score, category_id, det_type,
-                                             tracked=False)
+                    self.object_tracker.add_object(frame, detection, det_type)
+
+                    det_view = _to_view(detection, det_type, frame.id, frame_width_scale, frame_height_scale,
+                                        tracked=False)
                     self.all_detections.append(det_view)
                     self.detections_to_display.append(det_view)
-
-                    self.object_tracker.add_object(frame, det_view)
             elif self.frame_count % 2 == 0:
                 tracking_result = self.object_tracker.track_objects(frame)
                 if not tracking_result:
                     self.tracker_failures += 1
 
-                self.all_detections.extend(tracking_result)
-                self.detections_to_display.extend(tracking_result)
+                for (detection, det_type) in tracking_result:
+                    det_view = _to_view(detection, det_type, frame.id, frame_width_scale, frame_height_scale,
+                                        tracked=True)
+                    self.all_detections.append(det_view)
+                    self.detections_to_display.append(det_view)
 
             frame_at = time.time()
             fps = int(1 / (frame_at - self.prev_frame_at))
@@ -138,3 +149,10 @@ class EdgeDevice:
             cv.imshow('frame', frame.data)
             if cv.waitKey(1) == ord('q'):
                 break
+
+
+def _to_view(detection: Detection, det_type: DetectionType, frame_id: int, scale_width: float, scale_height: float,
+             tracked: bool) -> DetectionView:
+    (x, y, w, h) = scale(detection.bbox, scale_width, scale_height)
+    category_id = to_category_id(detection.category)
+    return DetectionView(frame_id, x, y, w, h, detection.score, category_id, det_type, tracked)

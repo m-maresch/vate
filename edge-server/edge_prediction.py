@@ -45,7 +45,7 @@ def _run_inference(image):
     image = cv.imdecode(image, cv.IMREAD_COLOR)
 
     original_height, original_width, _ = image.shape
-    image = cv.resize(image, (INPUT_HEIGHT, INPUT_WIDTH), interpolation=cv.INTER_LINEAR)
+    image = cv.resize(image, (INPUT_WIDTH, INPUT_HEIGHT), interpolation=cv.INTER_LINEAR)
 
     bgr_image = cudaFromNumpy(image, isBGR=True)
     rgb_image = cudaAllocMapped(width=bgr_image.width, height=bgr_image.height, format='rgb8')

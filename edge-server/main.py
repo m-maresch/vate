@@ -29,7 +29,7 @@ async def detect(file: UploadFile, background_tasks: BackgroundTasks,
 
 def _convert_detections(detections: List[RawDetection]) -> List[Detection]:
     return [Detection(
-        bbox=list(map(int, xyxy2xywh(detection.bbox))),
+        bbox=xyxy2xywh(detection.bbox),
         score=int(detection.score * 100),
         category=detection.class_name
     ) for detection in detections]

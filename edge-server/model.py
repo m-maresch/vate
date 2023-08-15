@@ -20,7 +20,7 @@ class RawDetection:
 class Detection(BaseModel):
     category: str
     score: int
-    bbox: List[int]
+    bbox: List[float]
 
 
 class DetectionResponse(BaseModel):
