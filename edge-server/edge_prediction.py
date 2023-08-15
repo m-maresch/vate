@@ -1,11 +1,12 @@
-from fastapi import FastAPI, Request
-
 import cv2 as cv
 import numpy as np
 import time
+from typing import List
 
 from jetson_inference import detectNet
 from jetson_utils import (cudaFromNumpy, cudaAllocMapped, cudaConvertColor)
+
+from model import RawDetection, DetectionType
 
 CATEGORIES = [
     {"id": 0, "name": "pedestrian"},
@@ -20,27 +21,40 @@ CATEGORIES = [
     {"id": 9, "name": "motor"}
 ]
 
-model = detectNet(model="mb2-ssd-lite.onnx", labels="onnxlabels.txt", input_blob="input_0", output_cvg="scores",
+MODEL = detectNet(model="mb2-ssd-lite.onnx", labels="onnxlabels.txt", input_blob="input_0", output_cvg="scores",
                   output_bbox="boxes", threshold=0.2)
+INPUT_WIDTH = 300
+INPUT_HEIGHT = 300
 
 
-def inference(image):
+def get_edge_predictions(frame: bytes) -> List[RawDetection]:
+    detections = _run_inference(frame)
+
+    return [RawDetection(
+        class_name=_to_category_name(detection.ClassID - 1),
+        score=detection.Confidence,
+        bbox=[detection.Left, detection.Top, detection.Right, detection.Bottom],
+        last_type=DetectionType.EDGE
+    ) for detection in detections]
+
+
+def _run_inference(image):
     start = time.time()
 
     image = np.frombuffer(image, dtype=np.uint8)
     image = cv.imdecode(image, cv.IMREAD_COLOR)
 
     original_height, original_width, _ = image.shape
-    image = cv.resize(image, (300, 300), interpolation=cv.INTER_LINEAR)
+    image = cv.resize(image, (INPUT_HEIGHT, INPUT_WIDTH), interpolation=cv.INTER_LINEAR)
 
     bgr_image = cudaFromNumpy(image, isBGR=True)
     rgb_image = cudaAllocMapped(width=bgr_image.width, height=bgr_image.height, format='rgb8')
     cudaConvertColor(bgr_image, rgb_image)
 
-    detections = model.Detect(rgb_image, overlay="box,labels,conf")
+    detections = MODEL.Detect(rgb_image, overlay="box,labels,conf")
 
-    scale_width = original_width / 300
-    scale_height = original_height / 300
+    scale_width = original_width / INPUT_WIDTH
+    scale_height = original_height / INPUT_HEIGHT
     for detection in detections:
         detection.Left *= scale_width
         detection.Right *= scale_width
@@ -53,32 +67,6 @@ def inference(image):
     return detections
 
 
-app = FastAPI()
-
-
-@app.get("/")
-async def root():
-    return {"status": "OK"}
-
-
-@app.get("/predictions/mobilenetv2_ssd_visdrone")
-async def predict(request: Request):
-    frame = await request.body()
-    detections = inference(frame)
-    return detections2json(detections)
-
-
-def detections2json(detections):
-    json = []
-    for detection in detections:
-        json.append({
-            "class_name": to_category_name(detection.ClassID - 1),
-            "bbox": [detection.Left, detection.Top, detection.Right, detection.Bottom],
-            "score": detection.Confidence,
-        })
-    return json
-
-
-def to_category_name(category_id: int) -> str:
+def _to_category_name(category_id: int) -> str:
     category = next(filter(lambda cat: cat["id"] == category_id, CATEGORIES))
     return category["name"]

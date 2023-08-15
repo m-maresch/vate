@@ -1,19 +1,16 @@
 from fastapi import BackgroundTasks
+from typing import List, Tuple
 import random
 
+from edge_prediction import get_edge_predictions
 from fusion import fuse_edge_cloud_detections
 from model import RawDetection, DetectionType
-from prediction import get_predictions
-
-EDGE_DETECTION_MODEL_URL: str = "http://127.0.0.1:9090/predictions/mobilenetv2_ssd_visdrone"
-CLOUD_DETECTION_MODEL_URL: str = "http://127.0.0.1:9093/predictions/faster_rcnn_visdrone"
-EDGE_DETECTION_TIMEOUT: int = 10
-CLOUD_DETECTION_TIMEOUT: int = 30
+from cloud_prediction import get_cloud_predictions
 
 
 class ObjectDetector:
-    last_detections: list[RawDetection]
-    last_cloud_detections: list[RawDetection]
+    last_detections: List[RawDetection]
+    last_cloud_detections: List[RawDetection]
     in_progress: bool
 
     def __init__(self):
@@ -22,11 +19,11 @@ class ObjectDetector:
         self.in_progress = False
 
     def detect_objects(self, frame: bytes,
-                       background_tasks: BackgroundTasks) -> tuple[DetectionType, list[RawDetection]]:
+                       background_tasks: BackgroundTasks) -> Tuple[DetectionType, List[RawDetection]]:
         if random.randint(0, 100) < 20 and not self.in_progress:
             background_tasks.add_task(self._cloud_detect_objects, frame)
 
-        edge_detections = self._edge_detect_objects(frame)
+        edge_detections = get_edge_predictions(frame)
         if self.last_cloud_detections:
             cloud_detections = self.last_cloud_detections.copy()
             self.last_cloud_detections.clear()
@@ -38,18 +35,15 @@ class ObjectDetector:
             self._record(detections)
             return DetectionType.EDGE, detections
 
-    def _edge_detect_objects(self, frame: bytes) -> list[RawDetection]:
-        return get_predictions(EDGE_DETECTION_MODEL_URL, frame, EDGE_DETECTION_TIMEOUT, DetectionType.EDGE)
-
     def _cloud_detect_objects(self, frame: bytes):
         self.in_progress = True
         print("Cloud detection start")
-        detections = get_predictions(CLOUD_DETECTION_MODEL_URL, frame, CLOUD_DETECTION_TIMEOUT, DetectionType.CLOUD)
+        detections = get_cloud_predictions(frame)
         self.last_cloud_detections.clear()
         self.last_cloud_detections.extend(detections)
         print("Cloud detection end")
         self.in_progress = False
 
-    def _record(self, detections: list[RawDetection]):
+    def _record(self, detections: List[RawDetection]):
         self.last_detections.clear()
         self.last_detections.extend(detections)

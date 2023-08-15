@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 from pydantic import BaseModel
+from typing import List
 
 
 class DetectionType(Enum):
@@ -12,17 +13,17 @@ class DetectionType(Enum):
 class RawDetection:
     class_name: str
     score: float
-    bbox: list[float]
+    bbox: List[float]
     last_type: DetectionType
 
 
 class Detection(BaseModel):
     category: str
     score: int
-    bbox: list[int]
+    bbox: List[int]
 
 
 class DetectionResponse(BaseModel):
     frame_id: int
     type: str
-    detections: list[Detection] = []
+    detections: List[Detection] = []

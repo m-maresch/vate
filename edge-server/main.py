@@ -1,4 +1,5 @@
 from fastapi import FastAPI, BackgroundTasks, UploadFile, Depends
+from typing import List
 
 from bbox import xyxy2xywh
 from detection import ObjectDetector
@@ -26,7 +27,7 @@ async def detect(file: UploadFile, background_tasks: BackgroundTasks,
     )
 
 
-def _convert_detections(detections: list[RawDetection]) -> list[Detection]:
+def _convert_detections(detections: List[RawDetection]) -> List[Detection]:
     return [Detection(
         bbox=list(map(int, xyxy2xywh(detection.bbox))),
         score=int(detection.score * 100),

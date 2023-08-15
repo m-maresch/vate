@@ -1,13 +1,14 @@
 from pycocotools.coco import maskUtils as mask
 from scipy.optimize import linear_sum_assignment
+from typing import List
 import numpy as np
 
 from model import RawDetection, DetectionType
 
 
-def fuse_edge_cloud_detections(current_detections: list[RawDetection],
-                               new_detections: list[RawDetection],
-                               new_type: DetectionType) -> list[RawDetection]:
+def fuse_edge_cloud_detections(current_detections: List[RawDetection],
+                               new_detections: List[RawDetection],
+                               new_type: DetectionType) -> List[RawDetection]:
     if not current_detections:
         return new_detections
 
