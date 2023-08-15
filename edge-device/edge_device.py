@@ -91,7 +91,7 @@ class EdgeDevice:
             if frame.id == -1:
                 break
 
-            frame_changed = False
+            frame_changed = True
             if prev_frame is not None:
                 frame_changed = frame_change_detected(frame, prev_frame)
 
