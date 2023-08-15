@@ -1,6 +1,5 @@
 import cv2 as cv
 
-from category import to_category_id, to_category_name
 from model import TrackerRecord, Frame, Detection, DetectionType
 
 
@@ -18,7 +17,7 @@ class MultiObjectTracker:
         try:
             tracker.init(frame.resized_data, detection.bbox)
             self.trackers.append(
-                TrackerRecord(tracker, detection.score, to_category_id(detection.category), det_type)
+                TrackerRecord(tracker, detection.score, detection.category, det_type)
             )
         except cv.error as e:
             print(f"Failed to init a tracker: {e}")
@@ -29,7 +28,7 @@ class MultiObjectTracker:
             ok, bbox = tracker.raw_tracker.update(frame.resized_data)
             if ok:
                 result.append(
-                    (Detection(to_category_name(tracker.det_category), tracker.det_score, bbox), tracker.det_type)
+                    (Detection(tracker.det_category, tracker.det_score, bbox), tracker.det_type)
                 )
 
         return result

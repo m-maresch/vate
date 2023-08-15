@@ -54,7 +54,7 @@ class AnnotationView:
 class TrackerRecord:
     raw_tracker: Any
     det_score: int
-    det_category: int
+    det_category: str
     det_type: DetectionType
 
 
