@@ -7,13 +7,11 @@ import time
 
 from model import Frame, ImageList
 
-MAX_FPS = 30
-DONE_FRAME = Frame(id=-1, data=-1, resized_data=-1)
-
 
 def get_frames(video: Union[str, None], images: ImageList, frame_processing_width: int,
-               frame_processing_height: int) -> Iterator[Frame]:
+               frame_processing_height: int, max_fps: int) -> Iterator[Frame]:
     if video is None:
+        video = 'camera'
         capture = cv.VideoCapture(0)
         if not capture.isOpened():
             print("Cannot open capture")
@@ -25,10 +23,10 @@ def get_frames(video: Union[str, None], images: ImageList, frame_processing_widt
             if not ret:
                 print("Cannot receive frame")
                 capture.release()
-                yield DONE_FRAME
+                yield Frame(id=-1, video=video, data=-1, resized_data=-1)
             resized_data = cv.resize(data, (frame_processing_width, frame_processing_height),
                                      interpolation=cv.INTER_LINEAR)
-            yield Frame(id=frame_id, data=data, resized_data=resized_data)
+            yield Frame(id=frame_id, video=video, data=data, resized_data=resized_data)
     else:
         frame_id = 0
         for file in sorted(glob.glob(video)):
@@ -42,15 +40,15 @@ def get_frames(video: Union[str, None], images: ImageList, frame_processing_widt
                                      interpolation=cv.INTER_LINEAR)
 
             before = time.time()
-            yield Frame(id=frame_id, data=data, resized_data=resized_data)
+            yield Frame(id=frame_id, video=video, data=data, resized_data=resized_data)
             after = time.time()
 
-            _wait_for_next_frame(processing_time=after - before)
+            _wait_for_next_frame(processing_time=after - before, max_fps=max_fps)
 
-        yield DONE_FRAME
+        yield Frame(id=-1, video=video, data=-1, resized_data=-1)
 
 
-def _wait_for_next_frame(processing_time: float):
-    remaining_time = (1 / MAX_FPS) - processing_time
+def _wait_for_next_frame(processing_time: float, max_fps: int):
+    remaining_time = (1 / max_fps) - processing_time
     if remaining_time > 0.0:
         time.sleep(remaining_time)

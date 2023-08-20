@@ -22,12 +22,12 @@ CATEGORIES = [
 ]
 
 MODEL = detectNet(model="mb2-ssd-lite.onnx", labels="onnxlabels.txt", input_blob="input_0", output_cvg="scores",
-                  output_bbox="boxes", threshold=0.2)
+                  output_bbox="boxes", threshold=0.35)
 INPUT_WIDTH = 300
 INPUT_HEIGHT = 300
 
 
-def get_edge_predictions(frame: bytes) -> List[RawDetection]:
+def get_edge_predictions(frame) -> List[RawDetection]:
     detections = _run_inference(frame)
 
     return [RawDetection(

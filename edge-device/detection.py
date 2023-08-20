@@ -1,30 +1,52 @@
+from typing import Union
+
 import cv2 as cv
+import json
 import numpy as np
-import requests
-import time
+import random
+import zmq
 
 from model import Detection, DetectionType, Frame
+
+context = zmq.Context()
+socket = context.socket(zmq.DEALER)
+socket.setsockopt_string(zmq.IDENTITY, str(random.randint(0, 8000)))
+socket.connect("tcp://127.0.0.1:8000")
 
 
 def frame_change_detected(frame: Frame, prev_frame: Frame) -> bool:
     return np.bitwise_xor(frame.resized_data, prev_frame.resized_data).any()
 
 
-def detect_objects(frame: Frame) -> tuple[DetectionType, list[Detection]]:
-    start = time.time()
+def detect_objects(frame: Frame, wait: bool) -> tuple[Union[DetectionType, None], list[Detection]]:
+    metadata = {
+        "frame_id": frame.id,
+        "video": frame.video
+    }
+    socket.send_string(json.dumps(metadata), zmq.SNDMORE)
 
     encode_param = [int(cv.IMWRITE_JPEG_QUALITY), 90]
     encoded = cv.imencode(".jpg", frame.resized_data, encode_param)[1]
-    file = {'file': (f'{frame.id}.jpg', encoded.tobytes(), 'image/jpeg')}
-    data = {"id": f"{frame.id}"}
-    response = requests.post("http://127.0.0.1:8000/detection", files=file, data=data, timeout=25)
-    body = response.json()
-    print(f"Got: {body}")
+
+    if encoded.flags['C_CONTIGUOUS']:
+        socket.send(encoded, 0, copy=False, track=False)
+    else:
+        encoded = np.ascontiguousarray(encoded)
+        socket.send(encoded, 0, copy=False, track=False)
+
+    timeout = 10
+    if wait:
+        timeout = 10000
+
+    if not socket.poll(timeout, zmq.POLLIN):
+        return None, []
+
+    response = socket.recv(zmq.NOBLOCK)
+
+    body = json.loads(response)
+
     det_type = DetectionType[body['type']]
     detections = body['detections']
-
-    end = time.time()
-    print(f"Took: {end - start}s")
 
     return det_type, [_to_detection(detection) for detection in detections]
 

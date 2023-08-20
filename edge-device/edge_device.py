@@ -30,10 +30,11 @@ class EdgeDevice:
     skipped_frames: int
     tracker_failures: int
 
-    def __init__(self, frame_processing_width: int, frame_processing_height: int, detection_rate: int,
+    def __init__(self, frame_processing_width: int, frame_processing_height: int, max_fps: int, detection_rate: int,
                  object_tracker: MultiObjectTracker):
         self.frame_processing_width = frame_processing_width
         self.frame_processing_height = frame_processing_height
+        self.max_fps = max_fps
         self.detection_rate = detection_rate
         self.object_tracker = object_tracker
 
@@ -89,53 +90,58 @@ class EdgeDevice:
         if annotations_available(video, annotations_path):
             (images, annotations) = load_annotations(video, annotations_path)
 
-        prev_frame: Union[Frame, None] = None
-        frames = get_frames(video, images, self.frame_processing_width, self.frame_processing_height)
+        frames = get_frames(video, images, self.frame_processing_width, self.frame_processing_height, self.max_fps)
+        prev_frames: list[Frame] = []
+        first_frame = True
+
+        all_fps = []
 
         while True:
             frame = next(frames)
             if frame.id == -1:
                 break
 
-            frame_height, frame_width, _ = frame.data.shape
-            frame_width_scale = frame_width / self.frame_processing_width
-            frame_height_scale = frame_height / self.frame_processing_height
-
             frame_changed = True
-            if prev_frame is not None:
-                frame_changed = frame_change_detected(frame, prev_frame)
+            if prev_frames:
+                frame_changed = frame_change_detected(frame, prev_frames[-1])
 
             if not frame_changed:
                 print('Skipping frame due to no changes')
                 self.skipped_frames += 1
             elif self.frame_count % self.detection_rate == 0:
-                self.detections_to_display = []
-                self.object_tracker.reset_objects()
-                (det_type, detections) = detect_objects(frame)
-                for detection in detections:
-                    self.object_tracker.add_object(frame, detection, det_type)
+                detected = True
+                (det_type, detections) = detect_objects(frame, wait=first_frame)
+                if det_type is None:
+                    detected = False
+                else:
+                    self.detections_to_display = []
+                    self.object_tracker.reset_objects()
 
-                    det_view = _to_view(detection, det_type, frame.id, frame_width_scale, frame_height_scale,
-                                        tracked=False)
-                    self.all_detections.append(det_view)
-                    self.detections_to_display.append(det_view)
-            elif self.frame_count % 2 == 0:
-                tracking_result = self.object_tracker.track_objects(frame)
-                if not tracking_result:
-                    self.tracker_failures += 1
+                    for detection in detections:
+                        self.object_tracker.add_object(frame, detection, det_type)
 
-                for (detection, det_type) in tracking_result:
-                    det_view = _to_view(detection, det_type, frame.id, frame_width_scale, frame_height_scale,
-                                        tracked=True)
-                    self.all_detections.append(det_view)
-                    self.detections_to_display.append(det_view)
+                    for prev_frame in prev_frames:
+                        self._track_objects(prev_frame)
+                    prev_frames.clear()
+
+                tracking_result = self._track_objects(frame)
+                det_views = self._convert_to_views(tracking_result, frame, tracked=not detected)
+                self.all_detections.extend(det_views)
+                self.detections_to_display.extend(det_views)
+            else:
+                tracking_result = self._track_objects(frame)
+                det_views = self._convert_to_views(tracking_result, frame, tracked=True)
+                self.all_detections.extend(det_views)
+                self.detections_to_display.extend(det_views)
 
             frame_at = time.time()
-            fps = int(1 / (frame_at - self.prev_frame_at))
+            fps = 1 / (frame_at - self.prev_frame_at)
+            all_fps.append(fps)
             self.prev_frame_at = frame_at
 
             self.frame_count += 1
-            prev_frame = frame
+            prev_frames.append(frame)
+            first_frame = False
 
             for received_detection in self.detections_to_display:
                 display_detection(frame.data, received_detection)
@@ -144,11 +150,29 @@ class EdgeDevice:
                 for annotation in annotations[frame.id]:
                     display_annotation(frame.data, annotation)
 
-            display_fps(frame.data, fps)
+            display_fps(frame.data, int(sum(all_fps) / len(all_fps)))
 
             cv.imshow('frame', frame.data)
             if cv.waitKey(1) == ord('q'):
                 break
+
+    def _track_objects(self, frame: Frame) -> list[tuple[Detection, DetectionType]]:
+        tracking_result = self.object_tracker.track_objects(frame)
+        if not tracking_result:
+            self.tracker_failures += 1
+
+        return tracking_result
+
+    def _convert_to_views(self, detections: list[tuple[Detection, DetectionType]], frame: Frame,
+                          tracked: bool) -> list[DetectionView]:
+        frame_height, frame_width, _ = frame.data.shape
+        frame_width_scale = frame_width / self.frame_processing_width
+        frame_height_scale = frame_height / self.frame_processing_height
+
+        return [
+            _to_view(detection, det_type, frame.id, frame_width_scale, frame_height_scale, tracked=tracked)
+            for (detection, det_type) in detections
+        ]
 
 
 def _to_view(detection: Detection, det_type: DetectionType, frame_id: int, scale_width: float, scale_height: float,

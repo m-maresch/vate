@@ -12,6 +12,7 @@ class Image:
 @dataclass
 class Frame:
     id: int
+    video: str
     data: Any
     resized_data: Any
 

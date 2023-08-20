@@ -1,5 +1,5 @@
-from fastapi import BackgroundTasks
-from typing import List, Tuple
+import asyncio
+from typing import List, Tuple, Dict
 import random
 
 from edge_prediction import get_edge_predictions
@@ -9,41 +9,39 @@ from cloud_prediction import get_cloud_predictions
 
 
 class ObjectDetector:
-    last_detections: List[RawDetection]
-    last_cloud_detections: List[RawDetection]
+    last_detections: Dict[str, List[RawDetection]]
+    last_cloud_detections: Dict[str, List[RawDetection]]
     in_progress: bool
 
     def __init__(self):
-        self.last_detections = []
-        self.last_cloud_detections = []
+        self.last_detections = dict()
+        self.last_cloud_detections = dict()
         self.in_progress = False
 
-    def detect_objects(self, frame: bytes,
-                       background_tasks: BackgroundTasks) -> Tuple[DetectionType, List[RawDetection]]:
+    async def detect_objects(self, video: str, frame) -> Tuple[DetectionType, List[RawDetection]]:
         if random.randint(0, 100) < 20 and not self.in_progress:
-            background_tasks.add_task(self._cloud_detect_objects, frame)
+            asyncio.ensure_future(self._cloud_detect_objects(video, frame))
 
         edge_detections = get_edge_predictions(frame)
-        if self.last_cloud_detections:
-            cloud_detections = self.last_cloud_detections.copy()
-            self.last_cloud_detections.clear()
+        if self.last_cloud_detections.get(video, []):
+            cloud_detections = self.last_cloud_detections[video].copy()
+            self.last_cloud_detections[video] = []
             detections = fuse_edge_cloud_detections(edge_detections, cloud_detections, DetectionType.CLOUD)
-            self._record(detections)
+            self._record(video, detections)
             return DetectionType.CLOUD, detections
         else:
-            detections = fuse_edge_cloud_detections(self.last_detections, edge_detections, DetectionType.EDGE)
-            self._record(detections)
+            detections = fuse_edge_cloud_detections(self.last_detections.get(video, []), edge_detections,
+                                                    DetectionType.EDGE)
+            self._record(video, detections)
             return DetectionType.EDGE, detections
 
-    def _cloud_detect_objects(self, frame: bytes):
+    async def _cloud_detect_objects(self, video: str, frame):
         self.in_progress = True
         print("Cloud detection start")
         detections = get_cloud_predictions(frame)
-        self.last_cloud_detections.clear()
-        self.last_cloud_detections.extend(detections)
+        self.last_cloud_detections[video] = detections
         print("Cloud detection end")
         self.in_progress = False
 
-    def _record(self, detections: List[RawDetection]):
-        self.last_detections.clear()
-        self.last_detections.extend(detections)
+    def _record(self, video: str, detections: List[RawDetection]):
+        self.last_detections[video] = detections
