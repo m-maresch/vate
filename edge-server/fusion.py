@@ -1,7 +1,6 @@
 from pycocotools.coco import maskUtils as mask
 from scipy.optimize import linear_sum_assignment
 from typing import List
-import numpy as np
 
 from model import RawDetection, DetectionType
 
@@ -12,14 +11,14 @@ def fuse_edge_cloud_detections(current_detections: List[RawDetection],
     if not current_detections:
         return new_detections
 
-    M = np.zeros((len(current_detections), len(new_detections)))
-    for i, current in enumerate(current_detections):
-        for j, new in enumerate(new_detections):
-            iou = mask.iou([current.bbox], [new.bbox], [0])
-            if iou >= 0.5:
-                M[i, j] = iou
-            else:
-                M[i, j] = 0
+    if not new_detections:
+        return []
+
+    current_detection_bboxes = [detection.bbox for detection in current_detections]
+    new_detection_bboxes = [detection.bbox for detection in new_detections]
+
+    M = mask.iou(current_detection_bboxes, new_detection_bboxes, [0] * len(new_detection_bboxes))
+    M[M < 0.5] = 0
 
     current_ind, new_ind = linear_sum_assignment(M, maximize=True)
     result = []
