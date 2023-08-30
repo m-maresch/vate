@@ -1,5 +1,6 @@
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
+from typing import List, Tuple
 
 from model import DetectionView
 
@@ -14,7 +15,7 @@ METRIC_TO_COCO_ID = {
 }
 
 
-def evaluate_detections(detections: list[DetectionView], annotations_path: str):
+def evaluate_detections(detections: List[DetectionView], annotations_path: str) -> Tuple[float, float]:
     results = [
         dict(
             image_id=detection.frame_id,
@@ -44,3 +45,5 @@ def evaluate_detections(detections: list[DetectionView], annotations_path: str):
         stat = coco_eval.stats[coco_id]
         eval_results[metric] = float(f'{stat:.4f}')
     print(f'Bounding box evaluation results: {eval_results}')
+
+    return eval_results['mAP'], eval_results['mAP_50']

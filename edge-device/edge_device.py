@@ -1,8 +1,7 @@
-from typing import Union
-
 import cv2 as cv
 import glob
 import time
+from typing import Union, List, Tuple
 
 from annotation import annotations_available, load_annotations
 from bbox import scale
@@ -24,8 +23,8 @@ class EdgeDevice:
     frame_count: int
     prev_frame_at: float
 
-    all_detections: list[DetectionView]
-    detections_to_display: list[DetectionView]
+    all_detections: List[DetectionView]
+    detections_to_display: List[DetectionView]
 
     skipped_frames: int
     tracker_failures: int
@@ -77,25 +76,41 @@ class EdgeDevice:
         self._process_video(None, None)
 
     def _process_multiple_videos(self, videos: str, annotations_path: Union[str, None]):
+        mAPs = []
+        mAP_50s = []
         for video in glob.glob(videos):
             self.detections_to_display = []
             self.object_tracker.reset_objects()
             self.frame_count = 0
             self.prev_frame_at = 0
-            self._process_video(f"{video}/*", annotations_path)
 
-    def _process_video(self, video: Union[str, None], annotations_path: Union[str, None]):
+            result = self._process_video(f"{video}/*", annotations_path)
+
+            if annotations_available(video, annotations_path):
+                mAP, mAP_50 = evaluate_detections(result, annotations_path)
+                mAPs.append(mAP)
+                mAP_50s.append(mAP_50)
+
+        print()
+        print(f"All mAPs: {mAPs}")
+        print(f"Average mAP: {sum(mAPs) / len(mAPs)}")
+        print(f"All mAP_50s: {mAP_50s}")
+        print(f"Average mAP_50: {sum(mAP_50s) / len(mAP_50s)}")
+        print()
+
+    def _process_video(self, video: Union[str, None], annotations_path: Union[str, None]) -> List[DetectionView]:
         images: ImageList = []
         annotations: AnnotationsByImage = dict()
         if annotations_available(video, annotations_path):
             (images, annotations) = load_annotations(video, annotations_path)
 
         frames = get_frames(video, images, self.frame_processing_width, self.frame_processing_height, self.max_fps)
-        prev_frames: list[Frame] = []
+        prev_frames: List[Frame] = []
         first_frame = True
 
         all_fps = []
 
+        result: List[DetectionView] = []
         while True:
             frame = next(frames)
             if frame.id == -1:
@@ -126,12 +141,12 @@ class EdgeDevice:
 
                 tracking_result = self._track_objects(frame)
                 det_views = self._convert_to_views(tracking_result, frame, tracked=not detected)
-                self.all_detections.extend(det_views)
+                result.extend(det_views)
                 self.detections_to_display.extend(det_views)
             else:
                 tracking_result = self._track_objects(frame)
                 det_views = self._convert_to_views(tracking_result, frame, tracked=True)
-                self.all_detections.extend(det_views)
+                result.extend(det_views)
                 self.detections_to_display.extend(det_views)
 
             frame_at = time.time()
@@ -156,15 +171,18 @@ class EdgeDevice:
             if cv.waitKey(1) == ord('q'):
                 break
 
-    def _track_objects(self, frame: Frame) -> list[tuple[Detection, DetectionType]]:
+        self.all_detections.extend(result)
+        return result
+
+    def _track_objects(self, frame: Frame) -> List[Tuple[Detection, DetectionType]]:
         tracking_result = self.object_tracker.track_objects(frame)
         if not tracking_result:
             self.tracker_failures += 1
 
         return tracking_result
 
-    def _convert_to_views(self, detections: list[tuple[Detection, DetectionType]], frame: Frame,
-                          tracked: bool) -> list[DetectionView]:
+    def _convert_to_views(self, detections: List[Tuple[Detection, DetectionType]], frame: Frame,
+                          tracked: bool) -> List[DetectionView]:
         frame_height, frame_width, _ = frame.data.shape
         frame_width_scale = frame_width / self.frame_processing_width
         frame_height_scale = frame_height / self.frame_processing_height

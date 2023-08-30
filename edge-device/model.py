@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, List, Dict
 
 
 @dataclass
@@ -26,7 +26,7 @@ class DetectionType(Enum):
 class Detection:
     category: str
     score: int
-    bbox: list[float]
+    bbox: List[float]
 
 
 @dataclass
@@ -59,5 +59,5 @@ class TrackerRecord:
     det_type: DetectionType
 
 
-ImageList = list[Image]
-AnnotationsByImage = dict[int, list[AnnotationView]]
+ImageList = List[Image]
+AnnotationsByImage = Dict[int, List[AnnotationView]]

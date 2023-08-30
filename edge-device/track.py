@@ -1,10 +1,11 @@
 import cv2 as cv
+from typing import List, Tuple
 
 from model import TrackerRecord, Frame, Detection, DetectionType
 
 
 class MultiObjectTracker:
-    trackers: list[TrackerRecord]
+    trackers: List[TrackerRecord]
 
     def __init__(self):
         self.trackers = []
@@ -22,7 +23,7 @@ class MultiObjectTracker:
         except cv.error as e:
             print(f"Failed to init a tracker: {e}")
 
-    def track_objects(self, frame: Frame) -> list[tuple[Detection, DetectionType]]:
+    def track_objects(self, frame: Frame) -> List[Tuple[Detection, DetectionType]]:
         result = []
         for tracker in self.trackers:
             ok, bbox = tracker.raw_tracker.update(frame.resized_data)

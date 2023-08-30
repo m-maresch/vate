@@ -1,4 +1,7 @@
-def scale(bbox: list[float], scale_width: float, scale_height: float) -> list[int]:
+from typing import List
+
+
+def scale(bbox: List[float], scale_width: float, scale_height: float) -> List[int]:
     return [
         int(bbox[0] * scale_width),
         int(bbox[1] * scale_height),
