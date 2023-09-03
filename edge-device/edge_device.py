@@ -6,10 +6,10 @@ from typing import Union, List, Tuple
 from annotation import annotations_available, load_annotations
 from bbox import scale
 from category import to_category_id
-from detection import detect_objects, frame_change_detected
 from display import display_detection, display_annotation, display_fps
+from edge_server import EdgeServer
 from evaluation import evaluate_detections
-from frame import get_frames
+from frame import frame_change_detected, get_frames
 from model import DetectionView, ImageList, AnnotationsByImage, Frame, Detection, DetectionType
 from track import MultiObjectTracker
 
@@ -17,8 +17,11 @@ from track import MultiObjectTracker
 class EdgeDevice:
     frame_processing_width: int
     frame_processing_height: int
+    max_fps: int
     detection_rate: int
     object_tracker: MultiObjectTracker
+    edge_server: EdgeServer
+    synchronous: bool
 
     frame_count: int
     prev_frame_at: float
@@ -29,13 +32,15 @@ class EdgeDevice:
     skipped_frames: int
     tracker_failures: int
 
-    def __init__(self, frame_processing_width: int, frame_processing_height: int, max_fps: int, detection_rate: int,
-                 object_tracker: MultiObjectTracker):
+    def __init__(self, frame_processing_width: int, frame_processing_height: int, max_fps: int,
+                 detection_rate: int, object_tracker: MultiObjectTracker, edge_server: EdgeServer, synchronous: bool):
         self.frame_processing_width = frame_processing_width
         self.frame_processing_height = frame_processing_height
         self.max_fps = max_fps
         self.detection_rate = detection_rate
         self.object_tracker = object_tracker
+        self.edge_server = edge_server
+        self.synchronous = synchronous
 
         self.frame_count = 0
         self.prev_frame_at = 0
@@ -47,6 +52,8 @@ class EdgeDevice:
         self.tracker_failures = 0
 
     def process(self, videos: Union[str, None], annotations_path: Union[str, None]):
+        self.edge_server.connect()
+
         items = []
         multiple_videos = False
 
@@ -125,9 +132,19 @@ class EdgeDevice:
                 self.skipped_frames += 1
             elif self.frame_count % self.detection_rate == 0:
                 detected = True
-                (det_type, detections) = detect_objects(frame, wait=first_frame)
+                (det_type, detections) = self.edge_server.detect_objects(frame, wait=first_frame or self.synchronous)
+
+                tracking_result = []
                 if det_type is None:
                     detected = False
+                    tracking_result = self._track_objects(frame)
+                elif self.synchronous:
+                    self.detections_to_display = []
+                    self.object_tracker.reset_objects()
+
+                    for detection in detections:
+                        self.object_tracker.add_object(frame, detection, det_type)
+                        tracking_result.append((detection, det_type))
                 else:
                     self.detections_to_display = []
                     self.object_tracker.reset_objects()
@@ -139,7 +156,8 @@ class EdgeDevice:
                         self._track_objects(prev_frame)
                     prev_frames.clear()
 
-                tracking_result = self._track_objects(frame)
+                    tracking_result = self._track_objects(frame)
+
                 det_views = self._convert_to_views(tracking_result, frame, tracked=not detected)
                 result.extend(det_views)
                 self.detections_to_display.extend(det_views)

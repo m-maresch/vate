@@ -1,11 +1,16 @@
 from typing import Union, Iterator
 
 import cv2 as cv
-import uuid
 import glob
+import numpy as np
 import time
+import uuid
 
 from model import Frame, ImageList
+
+
+def frame_change_detected(frame: Frame, prev_frame: Frame) -> bool:
+    return np.bitwise_xor(frame.resized_data, prev_frame.resized_data).any()
 
 
 def get_frames(video: Union[str, None], images: ImageList, frame_processing_width: int,
@@ -29,13 +34,21 @@ def get_frames(video: Union[str, None], images: ImageList, frame_processing_widt
             yield Frame(id=frame_id, video=video, data=data, resized_data=resized_data)
     else:
         frame_id = 0
+
+        frames = dict()
+        for file in sorted(glob.glob(video)):
+            frames[file] = cv.imread(file)
+
+        print("Loaded frames")
+
         for file in sorted(glob.glob(video)):
             if len(images) > 0:
                 image = next(filter(lambda img: file.endswith(img.file_name), images))
                 frame_id = image.id
             else:
                 frame_id = frame_id + 1
-            data = cv.imread(file)
+
+            data = frames[file]
             resized_data = cv.resize(data, (frame_processing_width, frame_processing_height),
                                      interpolation=cv.INTER_LINEAR)
 
