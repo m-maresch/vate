@@ -1,4 +1,5 @@
-from typing import List, Protocol
+from typing import List
+from typing_extensions import Protocol
 
 from model import RawDetection
 

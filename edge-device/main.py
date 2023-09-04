@@ -9,8 +9,8 @@ from track import MultiObjectTracker
 def main(videos: Union[str, None], annotations_path: Union[str, None], ipc: bool, sync: bool):
     print(f"Got: ipc={ipc}, sync={sync}")
 
-    frame_processing_width = 512
-    frame_processing_height = 512
+    frame_processing_width = 1333
+    frame_processing_height = 800
     max_fps = 30
 
     detection_rate = 3

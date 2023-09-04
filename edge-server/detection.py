@@ -23,7 +23,7 @@ class ObjectDetector:
 
     async def detect_objects(self, video: str, frame) -> Tuple[DetectionType, List[RawDetection]]:
         if not self.in_progress:
-            asyncio.ensure_future(self._cloud_detect_objects(video, frame))
+            asyncio.get_event_loop().run_in_executor(None, self._cloud_detect_objects, video, frame)
 
         edge_detections = self.edge_predictor.get_predictions(frame)
         if self.last_cloud_detections.get(video, []):
@@ -38,7 +38,7 @@ class ObjectDetector:
             self._record(video, detections)
             return DetectionType.EDGE, detections
 
-    async def _cloud_detect_objects(self, video: str, frame):
+    def _cloud_detect_objects(self, video: str, frame):
         self.in_progress = True
         print("Cloud detection start")
         detections = self.cloud_predictor.get_predictions(frame)
