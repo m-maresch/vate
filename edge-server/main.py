@@ -2,14 +2,14 @@ import argparse
 import asyncio
 
 from edge_server import EdgeServer
-from services import get_object_detector
+from services import get_predictor
 
 
 def main(ipc: bool, jetson: bool):
     print(f"Got: ipc={ipc}, jetson={jetson}")
 
-    object_detector = get_object_detector(jetson)
-    edge_server = EdgeServer(object_detector)
+    predictor = get_predictor(jetson)
+    edge_server = EdgeServer(predictor)
     edge_server.listen(ipc)
 
     event_loop = asyncio.get_event_loop()

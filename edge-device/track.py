@@ -29,7 +29,7 @@ class MultiObjectTracker:
             ok, bbox = tracker.raw_tracker.update(frame.resized_data)
             if ok:
                 result.append(
-                    (Detection(tracker.det_category, tracker.det_score, bbox), tracker.det_type)
+                    (Detection(tracker.det_category, tracker.det_score, list(map(int, bbox))), tracker.det_type)
                 )
 
         return result

@@ -7,7 +7,7 @@ from jetson_inference import detectNet
 from jetson_utils import (cudaFromNumpy, cudaAllocMapped, cudaConvertColor)
 
 from prediction import to_category_name
-from model import RawDetection, DetectionType
+from model import RawDetection
 
 
 class JetsonPredictor:
@@ -27,8 +27,7 @@ class JetsonPredictor:
         return [RawDetection(
             class_name=to_category_name(detection.ClassID - 1),
             score=detection.Confidence,
-            bbox=[detection.Left, detection.Top, detection.Right, detection.Bottom],
-            last_type=DetectionType.EDGE
+            bbox=[detection.Left, detection.Top, detection.Right, detection.Bottom]
         ) for detection in detections]
 
     def _run_inference(self, image):
