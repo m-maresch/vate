@@ -54,6 +54,7 @@ class AnnotationView:
 @dataclass
 class TrackerRecord:
     raw_tracker: Any
+    det_bbox: List[float]
     det_score: int
     det_category: str
     det_type: DetectionType

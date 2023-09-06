@@ -1,4 +1,5 @@
 import asyncio
+import time
 from typing import List, Tuple, Union
 
 from cloud_server import CloudServer
@@ -12,16 +13,19 @@ class EdgeCloudObjectDetector:
     edge_server: EdgeServer
     cloud_server: CloudServer
     object_tracker: MultiObjectTracker
+    max_fps: int
 
     prev_frames: List[Frame]
     last_detections: List[Detection]
     cloud_detection_done: bool
     last_cloud_detections: List[Detection]
 
-    def __init__(self, edge_server: EdgeServer, cloud_server: CloudServer, object_tracker: MultiObjectTracker):
+    def __init__(self, edge_server: EdgeServer, cloud_server: CloudServer, object_tracker: MultiObjectTracker,
+                 max_fps: int):
         self.edge_server = edge_server
         self.cloud_server = cloud_server
         self.object_tracker = object_tracker
+        self.max_fps = max_fps
         self.prev_frames = []
         self.last_detections = []
         self.cloud_detection_done = True
@@ -56,20 +60,25 @@ class EdgeCloudObjectDetector:
                 self.last_detections = detections
                 return DetectionType.EDGE, detections
         else:
-            detections = fuse_edge_cloud_detections(self.last_detections, edge_detections, DetectionType.EDGE)
+            detections = fuse_edge_cloud_detections([], edge_detections, DetectionType.EDGE)
             self.last_detections = detections
             return DetectionType.EDGE, detections
 
     def record(self, frame: Frame):
         self.prev_frames.append(frame)
 
+        if len(self.prev_frames) > self.max_fps:
+            self.prev_frames = self.prev_frames[-self.max_fps:]
+
     def _cloud_detect_objects(self, frame: Frame):
         self.cloud_detection_done = False
         self.last_cloud_detections = []
 
         print("Cloud detection start")
+        start = time.time()
         detections = self.cloud_server.detect_objects(frame)
-        print("Cloud detection end")
+        end = time.time()
+        print(f"Cloud detection end, took: {end - start}s")
 
         self.last_cloud_detections = detections
         self.cloud_detection_done = True

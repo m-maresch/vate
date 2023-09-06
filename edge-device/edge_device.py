@@ -118,6 +118,8 @@ class EdgeDevice:
 
         result: List[DetectionView] = []
         while True:
+            start = time.time()
+
             frame = next(frames)
             if frame.id == -1:
                 break
@@ -186,9 +188,13 @@ class EdgeDevice:
 
             display_fps(frame.data, int(sum(all_fps) / len(all_fps)))
 
+            end = time.time()
+
             cv.imshow('frame', frame.data)
             if cv.waitKey(1) == ord('q'):
                 break
+
+            print(f"Frame took: {end - start}s, with wait: {time.time() - start}s")
 
         self.all_detections.extend(result)
         return result
