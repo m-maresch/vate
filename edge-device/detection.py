@@ -1,5 +1,4 @@
 import asyncio
-import time
 from typing import List, Tuple, Union
 
 from cloud_server import CloudServer
@@ -75,10 +74,8 @@ class EdgeCloudObjectDetector:
         self.last_cloud_detections = []
 
         print("Cloud detection start")
-        start = time.time()
         detections = self.cloud_server.detect_objects(frame)
-        end = time.time()
-        print(f"Cloud detection end, took: {end - start}s")
+        print(f"Cloud detection end")
 
         self.last_cloud_detections = detections
         self.cloud_detection_done = True
