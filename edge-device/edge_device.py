@@ -87,6 +87,7 @@ class EdgeDevice:
         for video in glob.glob(videos):
             self.detections_to_display = []
             self.object_tracker.reset_objects()
+            self.object_detector.reset()
             self.frame_count = 0
             self.prev_frame_at = 0
 
@@ -143,6 +144,7 @@ class EdgeDevice:
                 elif self.synchronous:
                     self.detections_to_display = []
                     self.object_tracker.reset_objects()
+                    prev_frames.clear()
 
                     for detection in detections:
                         self.object_tracker.add_object(frame, detection, det_type)
@@ -154,11 +156,8 @@ class EdgeDevice:
                     for detection in detections:
                         self.object_tracker.add_object(frame, detection, det_type)
 
-                    for prev_frame in prev_frames:
-                        self._track_objects(prev_frame)
+                    tracking_result = self._track_objects_until_current(prev_frames, frame)
                     prev_frames.clear()
-
-                    tracking_result = self._track_objects(frame)
 
                 det_views = self._convert_to_views(tracking_result, frame, tracked=not detected)
                 result.extend(det_views)
@@ -203,6 +202,13 @@ class EdgeDevice:
         tracking_result = self.object_tracker.track_objects(frame)
         if not tracking_result:
             self.tracker_failures += 1
+
+        return tracking_result
+
+    def _track_objects_until_current(self, prev_frames: List[Frame],
+                                     current_frame: Frame) -> List[Tuple[Detection, DetectionType]]:
+        tracking_result, tracker_failures = self.object_tracker.track_objects_until_current(prev_frames, current_frame)
+        self.tracker_failures += tracker_failures
 
         return tracking_result
 
