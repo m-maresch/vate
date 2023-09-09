@@ -113,17 +113,17 @@ class EdgeDevice:
             (images, annotations) = load_annotations(video, annotations_path)
 
         frames = get_frames(video, images, self.frame_processing_width, self.frame_processing_height, self.max_fps)
+        frame_count = 0
         prev_frame: Union[Frame, None] = None
+        prev_frame_at = 0.0
         first_frame = True
+
+        fps_records: List[float] = []
 
         frames_until_current: List[Frame] = []
         reset_frames_until_current = False
 
         detections_to_display: List[DetectionView] = []
-
-        frame_count = 0
-        prev_frame_at = 0.0
-        fps_records: List[float] = []
 
         result: List[DetectionView] = []
         while True:
@@ -164,6 +164,7 @@ class EdgeDevice:
                 else:
                     detections_to_display = []
                     self.object_tracker.reset_objects()
+                    reset_frames_until_current = True
 
                     if frames_until_current:
                         for detection in detections:
@@ -175,7 +176,6 @@ class EdgeDevice:
 
                         tracking_result = self.object_tracker.track_objects_until_current(frames_until_current[1:],
                                                                                           frame)
-                        reset_frames_until_current = True
                     else:
                         tracking_result = [(detection, det_type) for detection in detections]
 
