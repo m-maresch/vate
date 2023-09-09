@@ -23,11 +23,8 @@ class EdgeDevice:
     object_detector: EdgeCloudObjectDetector
     synchronous: bool
 
-    frame_count: int
-    prev_frame_at: float
-
     all_detections: List[DetectionView]
-    detections_to_display: List[DetectionView]
+    all_fps: List[float]
 
     skipped_frames: int
 
@@ -42,11 +39,8 @@ class EdgeDevice:
         self.object_detector = object_detector
         self.synchronous = synchronous
 
-        self.frame_count = 0
-        self.prev_frame_at = 0
-
         self.all_detections = []
-        self.detections_to_display = []
+        self.all_fps = []
 
         self.skipped_frames = 0
 
@@ -73,46 +67,63 @@ class EdgeDevice:
             evaluate_detections(self.all_detections, annotations_path)
 
         cv.destroyAllWindows()
+
+        print(f"Total FPS average: {int(sum(self.all_fps) / len(self.all_fps))}")
         print(f"{self.skipped_frames} frames skipped")
 
     def _process_camera(self):
         self._process_video(None, None)
 
     def _process_multiple_videos(self, videos: str, annotations_path: Union[str, None]):
-        mAPs = []
-        mAP_50s = []
+        mAP_per_video = []
+        mAP_50_per_video = []
+        fps_per_video = []
+
         for video in glob.glob(videos):
-            self.detections_to_display = []
             self.object_tracker.reset_objects()
             self.object_detector.reset()
-            self.frame_count = 0
-            self.prev_frame_at = 0
 
-            result = self._process_video(f"{video}/*", annotations_path)
+            result, fps = self._process_video(f"{video}/*", annotations_path)
 
             if annotations_available(video, annotations_path):
                 mAP, mAP_50 = evaluate_detections(result, annotations_path)
-                mAPs.append(mAP)
-                mAP_50s.append(mAP_50)
+                mAP_per_video.append(mAP)
+                mAP_50_per_video.append(mAP_50)
+
+            print(f"FPS average: {fps}")
+            fps_per_video.append(fps)
 
         print()
-        print(f"All mAPs: {mAPs}")
-        print(f"Average mAP: {sum(mAPs) / len(mAPs)}")
-        print(f"All mAP_50s: {mAP_50s}")
-        print(f"Average mAP_50: {sum(mAP_50s) / len(mAP_50s)}")
+
+        if mAP_per_video:
+            print(f"All mAPs: {mAP_per_video}")
+            print(f"Average mAP: {sum(mAP_per_video) / len(mAP_per_video)}")
+        if mAP_50_per_video:
+            print(f"All mAP_50s: {mAP_50_per_video}")
+            print(f"Average mAP_50: {sum(mAP_50_per_video) / len(mAP_50_per_video)}")
+        print(f"All FPS averages: {fps_per_video}")
+
         print()
 
-    def _process_video(self, video: Union[str, None], annotations_path: Union[str, None]) -> List[DetectionView]:
+    def _process_video(self, video: Union[str, None],
+                       annotations_path: Union[str, None]) -> Tuple[List[DetectionView], int]:
         images: ImageList = []
         annotations: AnnotationsByImage = dict()
         if annotations_available(video, annotations_path):
             (images, annotations) = load_annotations(video, annotations_path)
 
         frames = get_frames(video, images, self.frame_processing_width, self.frame_processing_height, self.max_fps)
-        prev_frames: List[Frame] = []
+        prev_frame: Union[Frame, None] = None
         first_frame = True
 
-        all_fps = []
+        frames_until_current: List[Frame] = []
+        reset_frames_until_current = False
+
+        detections_to_display: List[DetectionView] = []
+
+        frame_count = 0
+        prev_frame_at = 0.0
+        fps_records: List[float] = []
 
         result: List[DetectionView] = []
         while True:
@@ -123,13 +134,17 @@ class EdgeDevice:
                 break
 
             frame_changed = True
-            if prev_frames:
-                frame_changed = frame_change_detected(frame, prev_frames[-1])
+            if prev_frame is not None:
+                frame_changed = frame_change_detected(frame, prev_frame)
 
             if not frame_changed:
                 print('Skipping frame due to no changes')
                 self.skipped_frames += 1
-            elif self.frame_count % self.detection_rate == 0:
+            elif frame_count % self.detection_rate == 0:
+                if reset_frames_until_current:
+                    frames_until_current.clear()
+                    reset_frames_until_current = False
+
                 detected = True
                 (det_type, detections) = self.object_detector.detect_objects(frame,
                                                                              wait=first_frame or self.synchronous)
@@ -139,58 +154,59 @@ class EdgeDevice:
                     detected = False
                     tracking_result = self.object_tracker.track_objects(frame)
                 elif self.synchronous:
-                    self.detections_to_display = []
+                    detections_to_display = []
                     self.object_tracker.reset_objects()
-                    prev_frames.clear()
+                    frames_until_current.clear()  # not used if synchronous, clear here to not fill up memory
 
                     for detection in detections:
                         self.object_tracker.add_object(frame, detection, det_type)
                         tracking_result.append((detection, det_type))
                 else:
-                    self.detections_to_display = []
+                    detections_to_display = []
                     self.object_tracker.reset_objects()
 
-                    if prev_frames:
+                    if frames_until_current:
                         for detection in detections:
                             self.object_tracker.add_object(
-                                prev_frames[0],
+                                frames_until_current[0],
                                 detection,
                                 det_type
                             )
 
-                        tracking_result = self.object_tracker.track_objects_until_current(prev_frames[1:], frame)
+                        tracking_result = self.object_tracker.track_objects_until_current(frames_until_current[1:],
+                                                                                          frame)
+                        reset_frames_until_current = True
                     else:
                         tracking_result = [(detection, det_type) for detection in detections]
 
-                    prev_frames.clear()
-
                 det_views = self._convert_to_views(tracking_result, frame, tracked=not detected)
                 result.extend(det_views)
-                self.detections_to_display.extend(det_views)
+                detections_to_display.extend(det_views)
             else:
                 tracking_result = self.object_tracker.track_objects(frame)
                 det_views = self._convert_to_views(tracking_result, frame, tracked=True)
                 result.extend(det_views)
-                self.detections_to_display.extend(det_views)
+                detections_to_display.extend(det_views)
 
             frame_at = time.time()
-            fps = 1 / (frame_at - self.prev_frame_at)
-            all_fps.append(fps)
-            self.prev_frame_at = frame_at
+            fps = 1 / (frame_at - prev_frame_at)
+            fps_records.append(fps)
+            prev_frame = frame
+            prev_frame_at = frame_at
 
-            self.frame_count += 1
+            frame_count += 1
+            frames_until_current.append(frame)
             self.object_detector.record(frame)
-            prev_frames.append(frame)
             first_frame = False
 
-            for received_detection in self.detections_to_display:
+            for received_detection in detections_to_display:
                 display_detection(frame.data, received_detection)
 
             if annotations_available(video, annotations_path):
                 for annotation in annotations[frame.id]:
                     display_annotation(frame.data, annotation)
 
-            display_fps(frame.data, int(sum(all_fps) / len(all_fps)))
+            display_fps(frame.data, int(sum(fps_records) / len(fps_records)))
 
             end = time.time()
 
@@ -201,7 +217,10 @@ class EdgeDevice:
             print(f"Frame took: {end - start}s, with wait: {time.time() - start}s")
 
         self.all_detections.extend(result)
-        return result
+        self.all_fps.extend(fps_records)
+
+        fps = int(sum(fps_records) / len(fps_records))
+        return result, fps
 
     def _convert_to_views(self, detections: List[Tuple[Detection, DetectionType]], frame: Frame,
                           tracked: bool) -> List[DetectionView]:

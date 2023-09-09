@@ -32,6 +32,8 @@ def main(videos: Union[str, None], annotations_path: Union[str, None], detection
                              object_tracker, object_detector, sync)
     edge_device.process(videos, annotations_path)
 
+    object_detector.stop_cloud_tracking_process()
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

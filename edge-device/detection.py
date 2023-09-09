@@ -2,7 +2,7 @@ import requests
 
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from multiprocessing import Process, Queue
-from queue import Empty
+from queue import Empty, Full
 from typing import List, Tuple, Union
 
 from cloud_server import CloudServer
@@ -22,7 +22,7 @@ class EdgeCloudObjectDetector:
     cloud_tracking_min_score: int
     max_fps: int
 
-    prev_frames: List[Frame]
+    frames_until_current: List[Frame]
     last_detections: List[Detection]
     cloud_detection: Future[List[Detection]]
 
@@ -35,7 +35,7 @@ class EdgeCloudObjectDetector:
         self.cloud_tracking_process = None
         self.cloud_tracking_min_score = cloud_tracking_min_score
         self.max_fps = max_fps
-        self.prev_frames = []
+        self.frames_until_current = []
         self.last_detections = []
         self.cloud_detection = Future()
         self.cloud_detection.set_result([])
@@ -46,6 +46,10 @@ class EdgeCloudObjectDetector:
             args=(self.cloud_tracking_input_queue, self.cloud_tracking_output_queue)
         )
         self.cloud_tracking_process.start()
+
+    def stop_cloud_tracking_process(self):
+        self.cloud_tracking_process.terminate()
+        self.cloud_tracking_process.close()
 
     def detect_objects(self, frame: Frame, wait: bool) -> Tuple[Union[DetectionType, None], List[Detection]]:
         edge_detections = self.edge_server.detect_objects(frame, wait)
@@ -75,13 +79,13 @@ class EdgeCloudObjectDetector:
             return DetectionType.EDGE, detections
 
     def record(self, frame: Frame):
-        self.prev_frames.append(frame)
+        self.frames_until_current.append(frame)
 
-        if len(self.prev_frames) > self.max_fps:
-            self.prev_frames = self.prev_frames[-self.max_fps:]
+        if len(self.frames_until_current) > self.max_fps:
+            self.frames_until_current = self.frames_until_current[-self.max_fps:]
 
     def reset(self):
-        self.prev_frames.clear()
+        self.frames_until_current.clear()
         self.last_detections.clear()
 
     def _cloud_detect_objects(self, frame: Frame) -> list[Detection]:
@@ -95,7 +99,7 @@ class EdgeCloudObjectDetector:
             return []
 
     def _add_cloud_tracking_task(self, cloud_detections: List[Detection], frame: Frame):
-        if not self.prev_frames:
+        if not self.frames_until_current:
             return
 
         try:
@@ -104,7 +108,11 @@ class EdgeCloudObjectDetector:
         except Empty:
             pass
 
-        self.cloud_tracking_input_queue.put_nowait(
-            (cloud_detections, self.prev_frames.copy(), frame, self.cloud_tracking_min_score)
-        )
-        self.prev_frames.clear()
+        try:
+            self.cloud_tracking_input_queue.put_nowait(
+                (cloud_detections, self.frames_until_current.copy(), frame, self.cloud_tracking_min_score)
+            )
+        except Full as e:
+            print("Cloud tracking failed:", e)
+
+        self.frames_until_current.clear()
