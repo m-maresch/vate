@@ -1,3 +1,5 @@
+from multiprocessing import Queue
+
 import cv2 as cv
 from typing import List, Tuple
 
@@ -62,3 +64,18 @@ class MultiObjectTracker:
                     )
 
         return result
+
+
+def track_objects_until_current_worker(input_queue: Queue, output_queue: Queue):
+    while True:
+        (detections, prev_frames, current_frame, min_score) = input_queue.get()
+
+        if not detections:
+            output_queue.put([])
+
+        object_tracker = MultiObjectTracker(min_score=min_score)
+        for detection in detections:
+            object_tracker.add_object(current_frame, detection, DetectionType.CLOUD)
+
+        tracking_result, _ = object_tracker.track_objects_until_current(prev_frames, current_frame)
+        output_queue.put([detection for detection, _ in tracking_result])

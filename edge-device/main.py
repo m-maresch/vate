@@ -15,17 +15,19 @@ def main(videos: Union[str, None], annotations_path: Union[str, None], ipc: bool
     frame_processing_height = 800
     max_fps = 30
 
-    detection_rate = 3
-    object_tracker = MultiObjectTracker(min_score=35)
+    detection_rate = 5
+    object_tracker = MultiObjectTracker(min_score=50)
 
     edge_server = EdgeServer(ipc, frame_processing_width, frame_processing_height)
+    edge_server.connect()
+
     cloud_server = CloudServer(
         detection_model_url="http://127.0.0.1:9093/predictions/faster_rcnn_visdrone",
         detection_timeout=30
     )
-    object_detector = EdgeCloudObjectDetector(edge_server, cloud_server, MultiObjectTracker(min_score=35), max_fps)
 
-    edge_server.connect()
+    object_detector = EdgeCloudObjectDetector(edge_server, cloud_server, cloud_tracking_min_score=50, max_fps=max_fps)
+    object_detector.start_cloud_tracking_process()
 
     edge_device = EdgeDevice(frame_processing_width, frame_processing_height, max_fps, detection_rate,
                              object_tracker, object_detector, sync)
