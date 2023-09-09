@@ -153,10 +153,18 @@ class EdgeDevice:
                     self.detections_to_display = []
                     self.object_tracker.reset_objects()
 
-                    for detection in detections:
-                        self.object_tracker.add_object(frame, detection, det_type)
+                    if prev_frames:
+                        for detection in detections:
+                            self.object_tracker.add_object(
+                                prev_frames[0],
+                                detection,
+                                det_type
+                            )
 
-                    tracking_result = self._track_objects_until_current(prev_frames, frame)
+                        tracking_result = self._track_objects_until_current(prev_frames[1:], frame)
+                    else:
+                        tracking_result = [(detection, det_type) for detection in detections]
+
                     prev_frames.clear()
 
                 det_views = self._convert_to_views(tracking_result, frame, tracked=not detected)

@@ -75,7 +75,7 @@ def track_objects_until_current_worker(input_queue: Queue, output_queue: Queue):
 
         object_tracker = MultiObjectTracker(min_score=min_score)
         for detection in detections:
-            object_tracker.add_object(current_frame, detection, DetectionType.CLOUD)
+            object_tracker.add_object(prev_frames[0], detection, DetectionType.CLOUD)
 
-        tracking_result, _ = object_tracker.track_objects_until_current(prev_frames, current_frame)
+        tracking_result, _ = object_tracker.track_objects_until_current(prev_frames[1:], current_frame)
         output_queue.put([detection for detection, _ in tracking_result])

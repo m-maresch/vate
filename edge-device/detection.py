@@ -95,6 +95,9 @@ class EdgeCloudObjectDetector:
             return []
 
     def _add_cloud_tracking_task(self, cloud_detections: List[Detection], frame: Frame):
+        if not self.prev_frames:
+            return
+
         try:
             while not self.cloud_tracking_input_queue.empty():
                 self.cloud_tracking_input_queue.get_nowait()
