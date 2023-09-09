@@ -33,8 +33,12 @@ class MultiObjectTracker:
 
     def track_objects_until_current(self, prev_frames: List[Frame],
                                     current_frame: Frame) -> List[Tuple[Detection, DetectionType]]:
-        for prev_frame in prev_frames:
-            self.track_objects(prev_frame)
+        if prev_frames:
+            self.track_objects(prev_frames[0])
+
+        for idx, prev_frame in enumerate(prev_frames[1:]):
+            if idx % 2 == 1:
+                self.track_objects(prev_frame)
 
         return self.track_objects(current_frame)
 
