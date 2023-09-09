@@ -30,7 +30,6 @@ class EdgeDevice:
     detections_to_display: List[DetectionView]
 
     skipped_frames: int
-    tracker_failures: int
 
     def __init__(self, frame_processing_width: int, frame_processing_height: int, max_fps: int,
                  detection_rate: int, object_tracker: MultiObjectTracker, object_detector: EdgeCloudObjectDetector,
@@ -50,7 +49,6 @@ class EdgeDevice:
         self.detections_to_display = []
 
         self.skipped_frames = 0
-        self.tracker_failures = 0
 
     def process(self, videos: Union[str, None], annotations_path: Union[str, None]):
         items = []
@@ -76,7 +74,6 @@ class EdgeDevice:
 
         cv.destroyAllWindows()
         print(f"{self.skipped_frames} frames skipped")
-        print(f"{self.tracker_failures} tracker failures")
 
     def _process_camera(self):
         self._process_video(None, None)
@@ -140,7 +137,7 @@ class EdgeDevice:
                 tracking_result = []
                 if det_type is None:
                     detected = False
-                    tracking_result = self._track_objects(frame)
+                    tracking_result = self.object_tracker.track_objects(frame)
                 elif self.synchronous:
                     self.detections_to_display = []
                     self.object_tracker.reset_objects()
@@ -161,7 +158,7 @@ class EdgeDevice:
                                 det_type
                             )
 
-                        tracking_result = self._track_objects_until_current(prev_frames[1:], frame)
+                        tracking_result = self.object_tracker.track_objects_until_current(prev_frames[1:], frame)
                     else:
                         tracking_result = [(detection, det_type) for detection in detections]
 
@@ -171,7 +168,7 @@ class EdgeDevice:
                 result.extend(det_views)
                 self.detections_to_display.extend(det_views)
             else:
-                tracking_result = self._track_objects(frame)
+                tracking_result = self.object_tracker.track_objects(frame)
                 det_views = self._convert_to_views(tracking_result, frame, tracked=True)
                 result.extend(det_views)
                 self.detections_to_display.extend(det_views)
@@ -205,20 +202,6 @@ class EdgeDevice:
 
         self.all_detections.extend(result)
         return result
-
-    def _track_objects(self, frame: Frame) -> List[Tuple[Detection, DetectionType]]:
-        tracking_result = self.object_tracker.track_objects(frame)
-        if not tracking_result:
-            self.tracker_failures += 1
-
-        return tracking_result
-
-    def _track_objects_until_current(self, prev_frames: List[Frame],
-                                     current_frame: Frame) -> List[Tuple[Detection, DetectionType]]:
-        tracking_result, tracker_failures = self.object_tracker.track_objects_until_current(prev_frames, current_frame)
-        self.tracker_failures += tracker_failures
-
-        return tracking_result
 
     def _convert_to_views(self, detections: List[Tuple[Detection, DetectionType]], frame: Frame,
                           tracked: bool) -> List[DetectionView]:

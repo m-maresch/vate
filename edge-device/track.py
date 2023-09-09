@@ -34,18 +34,11 @@ class MultiObjectTracker:
             print(f"Failed to init a tracker: {e}")
 
     def track_objects_until_current(self, prev_frames: List[Frame],
-                                    current_frame: Frame) -> Tuple[List[Tuple[Detection, DetectionType]], int]:
-        tracking_result = []
-        tracker_failures = 0
+                                    current_frame: Frame) -> List[Tuple[Detection, DetectionType]]:
+        for prev_frame in prev_frames:
+            self.track_objects(prev_frame)
 
-        frames = prev_frames.copy()
-        frames.append(current_frame)
-        for frame in frames:
-            tracking_result = self.track_objects(frame)
-            if not tracking_result:
-                tracker_failures += 1
-
-        return tracking_result, tracker_failures
+        return self.track_objects(current_frame)
 
     def track_objects(self, frame: Frame) -> List[Tuple[Detection, DetectionType]]:
         result = []
@@ -77,5 +70,5 @@ def track_objects_until_current_worker(input_queue: Queue, output_queue: Queue):
         for detection in detections:
             object_tracker.add_object(prev_frames[0], detection, DetectionType.CLOUD)
 
-        tracking_result, _ = object_tracker.track_objects_until_current(prev_frames[1:], current_frame)
+        tracking_result = object_tracker.track_objects_until_current(prev_frames[1:], current_frame)
         output_queue.put([detection for detection, _ in tracking_result])
