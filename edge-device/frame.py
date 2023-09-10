@@ -2,15 +2,10 @@ from typing import Union, Iterator
 
 import cv2 as cv
 import glob
-import numpy as np
 import time
 import uuid
 
 from model import Frame, ImageList
-
-
-def frame_change_detected(frame: Frame, prev_frame: Frame) -> bool:
-    return np.bitwise_xor(frame.resized_data, prev_frame.resized_data).any()
 
 
 def get_frames(video: Union[str, None], images: ImageList, frame_processing_width: int,

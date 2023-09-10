@@ -22,7 +22,7 @@ class MultiObjectTracker:
             )
             return
 
-        tracker = cv.legacy.TrackerKCF_create()
+        tracker = cv.legacy.TrackerMOSSE_create()
         try:
             tracker.init(frame.resized_data, detection.bbox)
             self.trackers.append(

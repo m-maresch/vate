@@ -9,7 +9,7 @@ from category import to_category_id
 from detection import EdgeCloudObjectDetector
 from display import display_detection, display_annotation, display_fps
 from evaluation import evaluate_detections
-from frame import frame_change_detected, get_frames
+from frame import get_frames
 from model import DetectionView, ImageList, AnnotationsByImage, Frame, Detection, DetectionType
 from track import MultiObjectTracker
 
@@ -26,8 +26,6 @@ class EdgeDevice:
     all_detections: List[DetectionView]
     all_fps: List[float]
 
-    skipped_frames: int
-
     def __init__(self, frame_processing_width: int, frame_processing_height: int, max_fps: int,
                  detection_rate: int, object_tracker: MultiObjectTracker, object_detector: EdgeCloudObjectDetector,
                  synchronous: bool):
@@ -41,8 +39,6 @@ class EdgeDevice:
 
         self.all_detections = []
         self.all_fps = []
-
-        self.skipped_frames = 0
 
     def process(self, videos: Union[str, None], annotations_path: Union[str, None]):
         items = []
@@ -69,7 +65,6 @@ class EdgeDevice:
         cv.destroyAllWindows()
 
         print(f"Total FPS average: {int(sum(self.all_fps) / len(self.all_fps))}")
-        print(f"{self.skipped_frames} frames skipped")
 
     def _process_camera(self):
         self._process_video(None, None)
@@ -114,7 +109,6 @@ class EdgeDevice:
 
         frames = get_frames(video, images, self.frame_processing_width, self.frame_processing_height, self.max_fps)
         frame_count = 0
-        prev_frame: Union[Frame, None] = None
         prev_frame_at = 0.0
         first_frame = True
 
@@ -133,14 +127,7 @@ class EdgeDevice:
             if frame.id == -1:
                 break
 
-            frame_changed = True
-            if prev_frame is not None:
-                frame_changed = frame_change_detected(frame, prev_frame)
-
-            if not frame_changed:
-                print('Skipping frame due to no changes')
-                self.skipped_frames += 1
-            elif frame_count % self.detection_rate == 0:
+            if frame_count % self.detection_rate == 0:
                 if reset_frames_until_current:
                     frames_until_current.clear()
                     reset_frames_until_current = False
@@ -191,7 +178,6 @@ class EdgeDevice:
             frame_at = time.time()
             fps = 1 / (frame_at - prev_frame_at)
             fps_records.append(fps)
-            prev_frame = frame
             prev_frame_at = frame_at
 
             frame_count += 1
