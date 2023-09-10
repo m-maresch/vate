@@ -26,7 +26,7 @@ class EdgeCloudObjectDetector:
     max_fps: int
 
     frames_until_current: List[Frame]
-    last_detections: List[Detection]
+    last_cloud_detections: List[Detection]
     cloud_detection: "Future[List[Detection]]"
 
     def __init__(self, edge_server: EdgeServer, cloud_server: CloudServer, cloud_tracking_min_score: int,
@@ -42,7 +42,7 @@ class EdgeCloudObjectDetector:
         self.cloud_tracking_stride = cloud_tracking_stride
         self.max_fps = max_fps
         self.frames_until_current = []
-        self.last_detections = []
+        self.last_cloud_detections = []
         self.cloud_detection = Future()
         self.cloud_detection.set_result([])
 
@@ -78,11 +78,10 @@ class EdgeCloudObjectDetector:
         if current_cloud_detections:
             detections = fuse_edge_cloud_detections(edge_detections, current_cloud_detections,
                                                     DetectionType.CLOUD)
-            self.last_detections = detections
+            self.last_cloud_detections = current_cloud_detections
             return DetectionType.CLOUD, detections
         else:
-            detections = fuse_edge_cloud_detections([], edge_detections, DetectionType.EDGE)
-            self.last_detections = detections
+            detections = fuse_edge_cloud_detections(self.last_cloud_detections, edge_detections, DetectionType.EDGE)
             return DetectionType.EDGE, detections
 
     def record(self, frame: Frame):
@@ -93,7 +92,7 @@ class EdgeCloudObjectDetector:
 
     def reset(self):
         self.frames_until_current.clear()
-        self.last_detections.clear()
+        self.last_cloud_detections.clear()
 
     def _cloud_detect_objects(self, frame: Frame) -> List[Detection]:
         try:
