@@ -25,14 +25,15 @@ def main(videos: Union[str, None], annotations_path: Union[str, None], detection
         detection_timeout=30
     )
 
-    object_detector = EdgeCloudObjectDetector(edge_server, cloud_server, cloud_tracking_min_score=50, max_fps=max_fps)
-    object_detector.start_cloud_tracking_process()
+    object_detector = EdgeCloudObjectDetector(edge_server, cloud_server, cloud_tracking_min_score=50,
+                                              cloud_tracking_stride=3, max_fps=max_fps)
+    object_detector.start_cloud_tracking()
 
     edge_device = EdgeDevice(frame_processing_width, frame_processing_height, max_fps, detection_rate,
                              object_tracker, object_detector, sync)
     edge_device.process(videos, annotations_path)
 
-    object_detector.stop_cloud_tracking_process()
+    object_detector.stop_cloud_tracking()
 
 
 if __name__ == '__main__':

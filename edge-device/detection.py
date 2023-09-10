@@ -1,55 +1,62 @@
 import requests
+import zmq
 
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
-from multiprocessing import Process, Queue, Event
+from multiprocessing import Process, Event
 from queue import Full
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Any
 
 from cloud_server import CloudServer
 from edge_server import EdgeServer
 from fusion import fuse_edge_cloud_detections
 from model import Detection, DetectionType, Frame
-from process import drain, track_objects_until_current_worker
+from process import track_objects_until_current_worker
 
 
 class EdgeCloudObjectDetector:
     edge_server: EdgeServer
     cloud_server: CloudServer
-    cloud_detection_executor: Executor
-    cloud_tracking_input_queue: Queue
-    cloud_tracking_output_queue: Queue
+    executor: Executor
     cloud_tracking_process: Union[Process, None]
+    cloud_tracking_context: Any
+    cloud_tracking_socket: Any
     cloud_tracking_stop_event: Event
     cloud_tracking_min_score: int
+    cloud_tracking_stride: int
     max_fps: int
 
     frames_until_current: List[Frame]
     last_detections: List[Detection]
-    cloud_detection: Future[List[Detection]]
+    cloud_detection: "Future[List[Detection]]"
 
-    def __init__(self, edge_server: EdgeServer, cloud_server: CloudServer, cloud_tracking_min_score: int, max_fps: int):
+    def __init__(self, edge_server: EdgeServer, cloud_server: CloudServer, cloud_tracking_min_score: int,
+                 cloud_tracking_stride: int, max_fps: int):
         self.edge_server = edge_server
         self.cloud_server = cloud_server
-        self.cloud_detection_executor = ThreadPoolExecutor()
-        self.cloud_tracking_input_queue = Queue(maxsize=1)
-        self.cloud_tracking_output_queue = Queue(maxsize=1)
+        self.executor = ThreadPoolExecutor()
         self.cloud_tracking_process = None
+        self.cloud_tracking_context = zmq.Context()
+        self.cloud_tracking_socket = self.cloud_tracking_context.socket(zmq.DEALER)
         self.cloud_tracking_stop_event = Event()
         self.cloud_tracking_min_score = cloud_tracking_min_score
+        self.cloud_tracking_stride = cloud_tracking_stride
         self.max_fps = max_fps
         self.frames_until_current = []
         self.last_detections = []
         self.cloud_detection = Future()
         self.cloud_detection.set_result([])
 
-    def start_cloud_tracking_process(self):
+    def start_cloud_tracking(self):
         self.cloud_tracking_process = Process(
             target=track_objects_until_current_worker,
-            args=(self.cloud_tracking_input_queue, self.cloud_tracking_output_queue, self.cloud_tracking_stop_event)
+            args=(self.cloud_tracking_stop_event,)
         )
         self.cloud_tracking_process.start()
 
-    def stop_cloud_tracking_process(self):
+        self.cloud_tracking_socket.setsockopt_string(zmq.IDENTITY, "edge-device")
+        self.cloud_tracking_socket.connect("ipc:///tmp/edge-device/0")
+
+    def stop_cloud_tracking(self):
         self.cloud_tracking_stop_event.set()
         self.cloud_tracking_process.join()
 
@@ -59,22 +66,20 @@ class EdgeCloudObjectDetector:
         if not edge_detections:
             return None, []
 
+        current_cloud_detections = []
+        if self.cloud_tracking_socket.poll(1, zmq.POLLIN):
+            current_cloud_detections = self.cloud_tracking_socket.recv_pyobj(zmq.NOBLOCK)
+
         if self.cloud_detection.done():
             cloud_detections = self.cloud_detection.result()
-            self.cloud_detection = self.cloud_detection_executor.submit(self._cloud_detect_objects, frame)
-            self._add_cloud_tracking_task(cloud_detections, frame)
+            self.cloud_detection = self.executor.submit(self._cloud_detect_objects, frame)
+            self.executor.submit(self._add_cloud_tracking_task, cloud_detections, frame)
 
-        if not self.cloud_tracking_output_queue.empty():
-            current_cloud_detections = self.cloud_tracking_output_queue.get_nowait()
-            if current_cloud_detections:
-                detections = fuse_edge_cloud_detections(edge_detections, current_cloud_detections,
-                                                        DetectionType.CLOUD)
-                self.last_detections = detections
-                return DetectionType.CLOUD, detections
-            else:
-                detections = fuse_edge_cloud_detections([], edge_detections, DetectionType.EDGE)
-                self.last_detections = detections
-                return DetectionType.EDGE, detections
+        if current_cloud_detections:
+            detections = fuse_edge_cloud_detections(edge_detections, current_cloud_detections,
+                                                    DetectionType.CLOUD)
+            self.last_detections = detections
+            return DetectionType.CLOUD, detections
         else:
             detections = fuse_edge_cloud_detections([], edge_detections, DetectionType.EDGE)
             self.last_detections = detections
@@ -90,7 +95,7 @@ class EdgeCloudObjectDetector:
         self.frames_until_current.clear()
         self.last_detections.clear()
 
-    def _cloud_detect_objects(self, frame: Frame) -> list[Detection]:
+    def _cloud_detect_objects(self, frame: Frame) -> List[Detection]:
         try:
             print("Cloud detection start")
             cloud_detections = self.cloud_server.detect_objects(frame)
@@ -104,13 +109,19 @@ class EdgeCloudObjectDetector:
         if not self.frames_until_current:
             return
 
-        drain(self.cloud_tracking_input_queue)
-
         try:
-            self.cloud_tracking_input_queue.put_nowait(
-                (cloud_detections, self.frames_until_current.copy(), frame, self.cloud_tracking_min_score)
+            obj = dict(
+                detections=cloud_detections,
+                frames_until_current=self._filter_frames_until_current(),
+                current_frame=frame,
+                min_score=self.cloud_tracking_min_score
             )
+            self.cloud_tracking_socket.send_pyobj(obj, protocol=-1)
         except Full as e:
             print("Cloud tracking failure:", e)
 
         self.frames_until_current.clear()
+
+    def _filter_frames_until_current(self) -> List[Frame]:
+        return [frame for idx, frame in enumerate(self.frames_until_current)
+                if idx % self.cloud_tracking_stride == 0]

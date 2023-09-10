@@ -31,14 +31,10 @@ class MultiObjectTracker:
         except cv.error as e:
             print(f"Failed to init a tracker: {e}")
 
-    def track_objects_until_current(self, prev_frames: List[Frame],
+    def track_objects_until_current(self, frames_until_current: List[Frame],
                                     current_frame: Frame) -> List[Tuple[Detection, DetectionType]]:
-        if prev_frames:
-            self.track_objects(prev_frames[0])
-
-        for idx, prev_frame in enumerate(prev_frames[1:]):
-            if idx % 2 == 1:
-                self.track_objects(prev_frame)
+        for frame in frames_until_current:
+            self.track_objects(frame)
 
         return self.track_objects(current_frame)
 
