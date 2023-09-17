@@ -24,7 +24,7 @@ class MultiObjectTracker:
 
         tracker = cv.legacy.TrackerMOSSE_create()
         try:
-            tracker.init(frame.resized_data, detection.bbox)
+            tracker.init(frame.edge_data, detection.bbox)
             self.trackers.append(
                 TrackerRecord(tracker, detection.bbox, detection.score, detection.category, det_type)
             )
@@ -48,7 +48,7 @@ class MultiObjectTracker:
                     (Detection(tracker.det_category, new_score, list(map(int, tracker.det_bbox))), tracker.det_type)
                 )
             else:
-                ok, bbox = tracker.raw_tracker.update(frame.resized_data)
+                ok, bbox = tracker.raw_tracker.update(frame.edge_data)
                 if ok:
                     result.append(
                         (Detection(tracker.det_category, tracker.det_score, list(map(int, bbox))), tracker.det_type)

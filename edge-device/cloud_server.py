@@ -17,7 +17,7 @@ class CloudServer:
 
     def detect_objects(self, frame: Frame) -> List[Detection]:
         encode_param = [int(cv.IMWRITE_JPEG_QUALITY), 90]
-        encoded = cv.imencode(".jpg", frame.resized_data, encode_param)[1]
+        encoded = cv.imencode(".jpg", frame.cloud_data, encode_param)[1]
 
         start = time.time()
 

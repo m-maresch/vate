@@ -14,7 +14,16 @@ class Frame:
     id: int
     video: str
     data: Any
-    resized_data: Any
+    edge_data: Any
+    cloud_data: Any
+
+
+@dataclass
+class Dimensions:
+    edge_processing_width: int
+    edge_processing_height: int
+    cloud_processing_width: int
+    cloud_processing_height: int
 
 
 class DetectionType(Enum):

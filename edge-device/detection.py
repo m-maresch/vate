@@ -6,10 +6,11 @@ from multiprocessing import Process, Event
 from queue import Full
 from typing import List, Tuple, Union, Any
 
+from bbox import scale
 from cloud_server import CloudServer
 from edge_server import EdgeServer
 from fusion import fuse_edge_cloud_detections
-from model import Detection, DetectionType, Frame
+from model import Detection, DetectionType, Frame, Dimensions
 from process import track_objects_until_current_worker
 
 
@@ -17,6 +18,7 @@ class EdgeCloudObjectDetector:
     edge_server: EdgeServer
     cloud_server: CloudServer
     executor: Executor
+    dimensions: Dimensions
     cloud_tracking_process: Union[Process, None]
     cloud_tracking_context: Any
     cloud_tracking_socket: Any
@@ -29,11 +31,12 @@ class EdgeCloudObjectDetector:
     last_cloud_detections: List[Detection]
     cloud_detection: "Future[List[Detection]]"
 
-    def __init__(self, edge_server: EdgeServer, cloud_server: CloudServer, cloud_tracking_min_score: int,
-                 cloud_tracking_stride: int, max_fps: int):
+    def __init__(self, edge_server: EdgeServer, cloud_server: CloudServer, dimensions: Dimensions,
+                 cloud_tracking_min_score: int, cloud_tracking_stride: int, max_fps: int):
         self.edge_server = edge_server
         self.cloud_server = cloud_server
         self.executor = ThreadPoolExecutor()
+        self.dimensions = dimensions
         self.cloud_tracking_process = None
         self.cloud_tracking_context = zmq.Context()
         self.cloud_tracking_socket = self.cloud_tracking_context.socket(zmq.DEALER)
@@ -72,8 +75,9 @@ class EdgeCloudObjectDetector:
 
         if self.cloud_detection.done():
             cloud_detections = self.cloud_detection.result()
+            scaled_cloud_detections = self._scale_cloud_to_edge(cloud_detections)
             self.cloud_detection = self.executor.submit(self._cloud_detect_objects, frame)
-            self.executor.submit(self._add_cloud_tracking_task, cloud_detections, frame)
+            self.executor.submit(self._add_cloud_tracking_task, scaled_cloud_detections, frame)
 
         if current_cloud_detections:
             detections = fuse_edge_cloud_detections(edge_detections, current_cloud_detections,
@@ -93,6 +97,20 @@ class EdgeCloudObjectDetector:
     def reset(self):
         self.frames_until_current.clear()
         self.last_cloud_detections.clear()
+
+    def _scale_cloud_to_edge(self, detections: List[Detection]) -> List[Detection]:
+        return [
+            Detection(
+                detection.category,
+                detection.score,
+                scale(
+                    detection.bbox,
+                    self.dimensions.edge_processing_width / self.dimensions.cloud_processing_width,
+                    self.dimensions.edge_processing_height / self.dimensions.cloud_processing_height
+                )
+            )
+            for detection in detections
+        ]
 
     def _cloud_detect_objects(self, frame: Frame) -> List[Detection]:
         try:

@@ -5,11 +5,10 @@ import glob
 import time
 import uuid
 
-from model import Frame, ImageList
+from model import Frame, ImageList, Dimensions
 
 
-def get_frames(video: Union[str, None], images: ImageList, frame_processing_width: int,
-               frame_processing_height: int, max_fps: int) -> Iterator[Frame]:
+def get_frames(video: Union[str, None], images: ImageList, dimensions: Dimensions, max_fps: int) -> Iterator[Frame]:
     if video is None:
         video = 'camera'
         capture = cv.VideoCapture(0)
@@ -23,10 +22,13 @@ def get_frames(video: Union[str, None], images: ImageList, frame_processing_widt
             if not ret:
                 print("Cannot receive frame")
                 capture.release()
-                yield Frame(id=-1, video=video, data=-1, resized_data=-1)
-            resized_data = cv.resize(data, (frame_processing_width, frame_processing_height),
-                                     interpolation=cv.INTER_LINEAR)
-            yield Frame(id=frame_id, video=video, data=data, resized_data=resized_data)
+                yield Frame(id=-1, video=video, data=-1, edge_data=-1, cloud_data=-1)
+            edge_data = cv.resize(data, (dimensions.edge_processing_width, dimensions.edge_processing_height),
+                                  interpolation=cv.INTER_LINEAR)
+            cloud_data = cv.resize(data, (dimensions.cloud_processing_width, dimensions.cloud_processing_height),
+                                   interpolation=cv.INTER_LINEAR)
+
+            yield Frame(id=frame_id, video=video, data=data, edge_data=edge_data, cloud_data=cloud_data)
     else:
         frame_id = 0
 
@@ -44,16 +46,18 @@ def get_frames(video: Union[str, None], images: ImageList, frame_processing_widt
                 frame_id = frame_id + 1
 
             data = frames[file]
-            resized_data = cv.resize(data, (frame_processing_width, frame_processing_height),
-                                     interpolation=cv.INTER_LINEAR)
+            edge_data = cv.resize(data, (dimensions.edge_processing_width, dimensions.edge_processing_height),
+                                  interpolation=cv.INTER_LINEAR)
+            cloud_data = cv.resize(data, (dimensions.cloud_processing_width, dimensions.cloud_processing_height),
+                                   interpolation=cv.INTER_LINEAR)
 
             before = time.time()
-            yield Frame(id=frame_id, video=video, data=data, resized_data=resized_data)
+            yield Frame(id=frame_id, video=video, data=data, edge_data=edge_data, cloud_data=cloud_data)
             after = time.time()
 
             _wait_for_next_frame(processing_time=after - before, max_fps=max_fps)
 
-        yield Frame(id=-1, video=video, data=-1, resized_data=-1)
+        yield Frame(id=-1, video=video, data=-1, edge_data=-1, cloud_data=-1)
 
 
 def _wait_for_next_frame(processing_time: float, max_fps: int):

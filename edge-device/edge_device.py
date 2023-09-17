@@ -10,13 +10,12 @@ from detection import EdgeCloudObjectDetector
 from display import display_detection, display_annotation, display_fps
 from evaluation import evaluate_detections
 from frame import get_frames
-from model import DetectionView, ImageList, AnnotationsByImage, Frame, Detection, DetectionType
+from model import DetectionView, ImageList, AnnotationsByImage, Frame, Detection, DetectionType, Dimensions
 from track import MultiObjectTracker
 
 
 class EdgeDevice:
-    frame_processing_width: int
-    frame_processing_height: int
+    dimensions: Dimensions
     max_fps: int
     detection_rate: int
     object_tracker: MultiObjectTracker
@@ -26,11 +25,9 @@ class EdgeDevice:
     all_detections: List[DetectionView]
     all_fps: List[float]
 
-    def __init__(self, frame_processing_width: int, frame_processing_height: int, max_fps: int,
-                 detection_rate: int, object_tracker: MultiObjectTracker, object_detector: EdgeCloudObjectDetector,
-                 synchronous: bool):
-        self.frame_processing_width = frame_processing_width
-        self.frame_processing_height = frame_processing_height
+    def __init__(self, dimensions: Dimensions, max_fps: int, detection_rate: int, object_tracker: MultiObjectTracker,
+                 object_detector: EdgeCloudObjectDetector, synchronous: bool):
+        self.dimensions = dimensions
         self.max_fps = max_fps
         self.detection_rate = detection_rate
         self.object_tracker = object_tracker
@@ -107,7 +104,7 @@ class EdgeDevice:
         if annotations_available(video, annotations_path):
             (images, annotations) = load_annotations(video, annotations_path)
 
-        frames = get_frames(video, images, self.frame_processing_width, self.frame_processing_height, self.max_fps)
+        frames = get_frames(video, images, self.dimensions, self.max_fps)
         frame_count = 0
         prev_frame_at = 0.0
         first_frame = True
@@ -211,8 +208,8 @@ class EdgeDevice:
     def _convert_to_views(self, detections: List[Tuple[Detection, DetectionType]], frame: Frame,
                           tracked: bool) -> List[DetectionView]:
         frame_height, frame_width, _ = frame.data.shape
-        frame_width_scale = frame_width / self.frame_processing_width
-        frame_height_scale = frame_height / self.frame_processing_height
+        frame_width_scale = frame_width / self.dimensions.edge_processing_width
+        frame_height_scale = frame_height / self.dimensions.edge_processing_height
 
         return [
             _to_view(detection, det_type, frame.id, frame_width_scale, frame_height_scale, tracked=tracked)
