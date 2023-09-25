@@ -3,7 +3,7 @@ import json
 import numpy as np
 import random
 import zmq
-from typing import List, Any
+from typing import List, Any, Union
 
 from bbox import xyxy2xywh
 from model import Detection, Frame
@@ -29,7 +29,7 @@ class EdgeServer:
         else:
             self.socket.connect("tcp://127.0.0.1:8000")
 
-    def send_frame(self, frame: Frame):
+    def send_frame(self, frame: Frame) -> bool:
         if not self.in_progress:
             encode_param = [int(cv.IMWRITE_JPEG_QUALITY), 90]
             encoded = cv.imencode(".jpg", frame.edge_data, encode_param)[1]
@@ -42,10 +42,12 @@ class EdgeServer:
             else:
                 encoded = np.ascontiguousarray(encoded)
                 self.socket.send(encoded, 0, copy=False, track=False)
+            return True
+        return False
 
-    def receive_object_detections(self, timeout: int) -> List[Detection]:
+    def receive_object_detections(self, timeout: int) -> Union[List[Detection], None]:
         if not self.socket.poll(timeout, zmq.POLLIN):
-            return []
+            return None
 
         print("Receiving detections")
         self.in_progress = False

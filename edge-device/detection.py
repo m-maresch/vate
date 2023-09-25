@@ -67,15 +67,15 @@ class EdgeCloudObjectDetector:
         self.request_edge_object_detections_async(frame)
         return self.get_edge_object_detections_async(current_detections, timeout=60000)
 
-    def request_edge_object_detections_async(self, frame: Frame):
-        self.edge_server.send_frame(frame)
+    def request_edge_object_detections_async(self, frame: Frame) -> bool:
+        return self.edge_server.send_frame(frame)
 
     def get_edge_object_detections_async(self,
                                          current_detections: DetectionsWithTypes,
                                          timeout: int = 3) -> Union[DetectionsWithTypes, None]:
         edge_detections = self.edge_server.receive_object_detections(timeout)
 
-        if not edge_detections:
+        if edge_detections is None:
             return None
 
         current_detections = [detection for detection, det_type in current_detections

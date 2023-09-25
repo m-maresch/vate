@@ -32,17 +32,17 @@ class MultiObjectTracker:
             print(f"Failed to init a tracker: {e}")
 
     def track_objects_until_current(self, frames_until_current: List[Frame],
-                                    current_frame: Frame) -> DetectionsWithTypes:
+                                    current_frame: Frame, decay: float = 0.9) -> DetectionsWithTypes:
         for frame in frames_until_current:
-            self.track_objects(frame)
+            self.track_objects(frame, decay)
 
-        return self.track_objects(current_frame)
+        return self.track_objects(current_frame, decay)
 
-    def track_objects(self, frame: Frame) -> DetectionsWithTypes:
+    def track_objects(self, frame: Frame, decay: float = 0.8) -> DetectionsWithTypes:
         result = []
         for tracker in self.trackers:
             if tracker.raw_tracker is None:
-                new_score = int(0.9 * tracker.det_score)
+                new_score = int(decay * tracker.det_score)
                 tracker.det_score = new_score
                 result.append(
                     (Detection(tracker.det_category, new_score, list(map(int, tracker.det_bbox))), tracker.det_type)
@@ -54,10 +54,10 @@ class MultiObjectTracker:
                         (Detection(tracker.det_category, tracker.det_score, list(map(int, bbox))), tracker.det_type)
                     )
                 else:
-                    new_score = int(0.9 * tracker.det_score)
+                    new_score = int(decay * tracker.det_score)
                     tracker.det_score = new_score
                     result.append(
                         (Detection(tracker.det_category, new_score, list(map(int, tracker.det_bbox))), tracker.det_type)
                     )
 
-        return result
+        return [(detection, det_type) for detection, det_type in result if detection.score > 0]

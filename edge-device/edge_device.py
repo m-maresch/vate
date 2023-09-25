@@ -1,5 +1,6 @@
 import cv2 as cv
 import glob
+import numpy as np
 import time
 from typing import Union, List, Tuple
 
@@ -62,7 +63,12 @@ class EdgeDevice:
 
         cv.destroyAllWindows()
 
-        print(f"Total FPS average: {int(sum(self.all_fps) / len(self.all_fps))}")
+        fps_avg = int(sum(self.all_fps) / len(self.all_fps))
+        fps_bins = np.append(np.arange(0, self.max_fps + 1, step=5), np.inf)
+        fps_histogram = np.histogram(self.all_fps, bins=fps_bins)
+
+        print(f"Total FPS average: {fps_avg}")
+        print(f"Total FPS histogram: {fps_histogram} (includes {sum(fps_histogram[0])}/{len(self.all_fps)})")
 
     def _process_camera(self):
         self._process_video(None, None)
@@ -76,13 +82,14 @@ class EdgeDevice:
             self.object_tracker.reset_objects()
             self.object_detector.reset()
 
-            result, fps = self._process_video(f"{video}/*", annotations_path)
+            result, fps_records = self._process_video(f"{video}/*", annotations_path)
 
             if annotations_available(video, annotations_path):
                 mAP, mAP_50 = evaluate_detections(result, annotations_path)
                 mAP_per_video.append(mAP)
                 mAP_50_per_video.append(mAP_50)
 
+            fps = int(sum(fps_records) / len(fps_records))
             print(f"FPS average: {fps}")
             fps_per_video.append(fps)
 
@@ -99,7 +106,7 @@ class EdgeDevice:
         print()
 
     def _process_video(self, video: Union[str, None],
-                       annotations_path: Union[str, None]) -> Tuple[List[DetectionView], int]:
+                       annotations_path: Union[str, None]) -> Tuple[List[DetectionView], List[float]]:
         images: List[Image] = []
         annotations: AnnotationsByImage = dict()
         if annotations_available(video, annotations_path):
@@ -130,37 +137,34 @@ class EdgeDevice:
 
             if self.sync:
                 if frame_count % self.detection_rate == 0:
-                    frames_until_current.clear()  # not used if synchronous, clear here to not fill up memory
-
                     detections = self.object_detector.get_edge_object_detections_sync(frame, current_detections)
                     current_detections = detections
-
                     reset_tracker = True
                 else:
                     tracked = True
                     current_detections = self.object_tracker.track_objects(frame)
             else:
                 if frame_count % self.detection_rate == 0 and not first_frame:
-                    self.object_detector.request_edge_object_detections_async(frame)
+                    ok = self.object_detector.request_edge_object_detections_async(frame)
+                    if ok:
+                        reset_frames_until_current = True
 
                 if reset_frames_until_current:
                     frames_until_current.clear()
                     reset_frames_until_current = False
+                frames_until_current.append(frame)
 
-                detections = None
-                if not first_frame:
-                    detections = self.object_detector.get_edge_object_detections_async(current_detections)
-                else:
+                if first_frame:
                     detections = self.object_detector.get_edge_object_detections_sync(frame, current_detections)
-
-                if detections is None:
-                    tracked = True
-                    current_detections = self.object_tracker.track_objects(frame)
+                    current_detections = detections
+                    reset_tracker = True
                 else:
-                    reset_frames_until_current = True
+                    detections = self.object_detector.get_edge_object_detections_async(current_detections)
 
-                    if frames_until_current:
-                        reset_tracker = False
+                    if detections is None:
+                        tracked = True
+                        current_detections = self.object_tracker.track_objects(frame)
+                    else:
                         self.object_tracker.reset_objects()
                         for (detection, det_type) in detections:
                             self.object_tracker.add_object(
@@ -170,12 +174,10 @@ class EdgeDevice:
                             )
 
                         current_detections = self.object_tracker.track_objects_until_current(
-                            frames_until_current[1:],
-                            frame
+                            frames_until_current[1:-1],
+                            frame,
+                            decay=1.0
                         )
-                    else:
-                        reset_tracker = True
-                        current_detections = detections
 
             self.object_detector.record(frame)
             detections = self.object_detector.get_cloud_object_detections_async(frame, current_detections)
@@ -197,7 +199,6 @@ class EdgeDevice:
             prev_frame_at = frame_at
 
             frame_count += 1
-            frames_until_current.append(frame)
             first_frame = False
 
             for current_detection in current_det_views:
@@ -207,7 +208,7 @@ class EdgeDevice:
                 for annotation in annotations[frame.id]:
                     display_annotation(frame.data, annotation)
 
-            display_fps(frame.data, int(sum(fps_records) / len(fps_records)))
+            display_fps(frame.data, int(fps))
 
             end = time.time()
 
@@ -220,8 +221,7 @@ class EdgeDevice:
         self.all_detections.extend(result)
         self.all_fps.extend(fps_records)
 
-        fps = int(sum(fps_records) / len(fps_records))
-        return result, fps
+        return result, fps_records
 
     def _convert_to_views(self, detections: DetectionsWithTypes, frame: Frame, tracked: bool) -> List[DetectionView]:
         frame_height, frame_width, _ = frame.data.shape
