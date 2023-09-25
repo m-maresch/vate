@@ -1,14 +1,14 @@
-from typing import Union, Iterator
+from typing import Union, Iterator, List
 
 import cv2 as cv
 import glob
 import time
 import uuid
 
-from model import Frame, ImageList, Dimensions
+from model import Frame, Dimensions, Image
 
 
-def get_frames(video: Union[str, None], images: ImageList, dimensions: Dimensions, max_fps: int) -> Iterator[Frame]:
+def get_frames(video: Union[str, None], images: List[Image], dimensions: Dimensions, max_fps: int) -> Iterator[Frame]:
     if video is None:
         video = 'camera'
         capture = cv.VideoCapture(0)

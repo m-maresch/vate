@@ -1,14 +1,14 @@
 import json
-from typing import Union, Tuple
+from typing import Union, Tuple, List
 
-from model import AnnotationView, Image, ImageList, AnnotationsByImage
+from model import AnnotationView, Image, AnnotationsByImage
 
 
 def annotations_available(video: Union[str, None], annotations_path: Union[str, None]) -> bool:
     return video is not None and annotations_path is not None
 
 
-def load_annotations(video, annotations_path) -> Tuple[ImageList, AnnotationsByImage]:
+def load_annotations(video, annotations_path) -> Tuple[List[Image], AnnotationsByImage]:
     with open(annotations_path) as annotations_file:
         annotations_json = json.load(annotations_file)
         images = _to_images_of_video(annotations_json['images'], video)
@@ -29,7 +29,7 @@ def load_annotations(video, annotations_path) -> Tuple[ImageList, AnnotationsByI
         return images_sorted, annotations
 
 
-def _to_images_of_video(images, video) -> ImageList:
+def _to_images_of_video(images, video) -> List[Image]:
     video_name = video.split("/")[-2]
     images = [image for image in images
               if video_name in image['file_name']]

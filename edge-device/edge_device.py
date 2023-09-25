@@ -10,7 +10,8 @@ from detection import EdgeCloudObjectDetector
 from display import display_detection, display_annotation, display_fps
 from evaluation import evaluate_detections
 from frame import get_frames
-from model import DetectionView, ImageList, AnnotationsByImage, Frame, Detection, DetectionType, Dimensions
+from model import DetectionView, AnnotationsByImage, Frame, Detection, DetectionType, DetectionsWithTypes, Dimensions, \
+    Image
 from track import MultiObjectTracker
 
 
@@ -20,19 +21,19 @@ class EdgeDevice:
     detection_rate: int
     object_tracker: MultiObjectTracker
     object_detector: EdgeCloudObjectDetector
-    synchronous: bool
+    sync: bool
 
     all_detections: List[DetectionView]
     all_fps: List[float]
 
     def __init__(self, dimensions: Dimensions, max_fps: int, detection_rate: int, object_tracker: MultiObjectTracker,
-                 object_detector: EdgeCloudObjectDetector, synchronous: bool):
+                 object_detector: EdgeCloudObjectDetector, sync: bool):
         self.dimensions = dimensions
         self.max_fps = max_fps
         self.detection_rate = detection_rate
         self.object_tracker = object_tracker
         self.object_detector = object_detector
-        self.synchronous = synchronous
+        self.sync = sync
 
         self.all_detections = []
         self.all_fps = []
@@ -99,7 +100,7 @@ class EdgeDevice:
 
     def _process_video(self, video: Union[str, None],
                        annotations_path: Union[str, None]) -> Tuple[List[DetectionView], int]:
-        images: ImageList = []
+        images: List[Image] = []
         annotations: AnnotationsByImage = dict()
         if annotations_available(video, annotations_path):
             (images, annotations) = load_annotations(video, annotations_path)
@@ -114,7 +115,7 @@ class EdgeDevice:
         frames_until_current: List[Frame] = []
         reset_frames_until_current = False
 
-        current_detections: List[Tuple[Detection, DetectionType]] = []
+        current_detections: DetectionsWithTypes = []
 
         result: List[DetectionView] = []
         while True:
@@ -127,11 +128,11 @@ class EdgeDevice:
             tracked = False
             reset_tracker = False
 
-            if self.synchronous:
+            if self.sync:
                 if frame_count % self.detection_rate == 0:
                     frames_until_current.clear()  # not used if synchronous, clear here to not fill up memory
 
-                    detections = self.object_detector.edge_detect_objects(frame, current_detections, sync=True)
+                    detections = self.object_detector.get_edge_object_detections_sync(frame, current_detections)
                     current_detections = detections
 
                     reset_tracker = True
@@ -139,15 +140,18 @@ class EdgeDevice:
                     tracked = True
                     current_detections = self.object_tracker.track_objects(frame)
             else:
-                if frame_count % self.detection_rate == 0:
-                    if not first_frame:
-                        self.object_detector.init_edge_detect_objects(frame)
+                if frame_count % self.detection_rate == 0 and not first_frame:
+                    self.object_detector.request_edge_object_detections_async(frame)
 
                 if reset_frames_until_current:
                     frames_until_current.clear()
                     reset_frames_until_current = False
 
-                detections = self.object_detector.edge_detect_objects(frame, current_detections, sync=first_frame)
+                detections = None
+                if not first_frame:
+                    detections = self.object_detector.get_edge_object_detections_async(current_detections)
+                else:
+                    detections = self.object_detector.get_edge_object_detections_sync(frame, current_detections)
 
                 if detections is None:
                     tracked = True
@@ -174,7 +178,7 @@ class EdgeDevice:
                         current_detections = detections
 
             self.object_detector.record(frame)
-            detections = self.object_detector.cloud_detect_objects(frame, current_detections)
+            detections = self.object_detector.get_cloud_object_detections_async(frame, current_detections)
             if detections is not None:
                 current_detections = detections
                 reset_tracker = True
@@ -219,8 +223,7 @@ class EdgeDevice:
         fps = int(sum(fps_records) / len(fps_records))
         return result, fps
 
-    def _convert_to_views(self, detections: List[Tuple[Detection, DetectionType]], frame: Frame,
-                          tracked: bool) -> List[DetectionView]:
+    def _convert_to_views(self, detections: DetectionsWithTypes, frame: Frame, tracked: bool) -> List[DetectionView]:
         frame_height, frame_width, _ = frame.data.shape
         frame_width_scale = frame_width / self.dimensions.edge_processing_width
         frame_height_scale = frame_height / self.dimensions.edge_processing_height

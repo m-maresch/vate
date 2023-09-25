@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Tuple
 
 
 @dataclass
@@ -69,5 +69,5 @@ class TrackerRecord:
     det_type: DetectionType
 
 
-ImageList = List[Image]
+DetectionsWithTypes = List[Tuple[Detection, DetectionType]]
 AnnotationsByImage = Dict[int, List[AnnotationView]]

@@ -29,7 +29,7 @@ class EdgeServer:
         else:
             self.socket.connect("tcp://127.0.0.1:8000")
 
-    def init_detect_objects(self, frame: Frame):
+    def send_frame(self, frame: Frame):
         if not self.in_progress:
             encode_param = [int(cv.IMWRITE_JPEG_QUALITY), 90]
             encoded = cv.imencode(".jpg", frame.edge_data, encode_param)[1]
@@ -43,12 +43,7 @@ class EdgeServer:
                 encoded = np.ascontiguousarray(encoded)
                 self.socket.send(encoded, 0, copy=False, track=False)
 
-    def detect_objects(self, frame: Frame, sync: bool) -> List[Detection]:
-        timeout = 3
-        if sync:
-            timeout = 60000
-            self.init_detect_objects(frame)
-
+    def receive_object_detections(self, timeout: int) -> List[Detection]:
         if not self.socket.poll(timeout, zmq.POLLIN):
             return []
 

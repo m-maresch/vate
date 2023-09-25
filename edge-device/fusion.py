@@ -1,13 +1,13 @@
 from pycocotools.coco import maskUtils as mask
 from scipy.optimize import linear_sum_assignment
-from typing import List, Tuple
+from typing import List
 
-from model import Detection, DetectionType
+from model import Detection, DetectionType, DetectionsWithTypes
 
 
 def fuse_edge_cloud_detections(current_detections: List[Detection],
                                new_detections: List[Detection],
-                               new_type: DetectionType) -> List[Tuple[Detection, DetectionType]]:
+                               new_type: DetectionType) -> DetectionsWithTypes:
     if not current_detections:
         return [(detection, new_type) for detection in new_detections]
 
