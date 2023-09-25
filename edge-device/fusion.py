@@ -1,15 +1,15 @@
 from pycocotools.coco import maskUtils as mask
 from scipy.optimize import linear_sum_assignment
-from typing import List
+from typing import List, Tuple
 
 from model import Detection, DetectionType
 
 
 def fuse_edge_cloud_detections(current_detections: List[Detection],
                                new_detections: List[Detection],
-                               new_type: DetectionType) -> List[Detection]:
+                               new_type: DetectionType) -> List[Tuple[Detection, DetectionType]]:
     if not current_detections:
-        return new_detections
+        return [(detection, new_type) for detection in new_detections]
 
     if not new_detections:
         return []
@@ -40,14 +40,19 @@ def fuse_edge_cloud_detections(current_detections: List[Detection],
                 category = current_detections[i].category
                 bbox = new_detections[j].bbox
             score = new_detections[j].score
-            result.append(Detection(category=category, score=score, bbox=bbox))
+            result.append((Detection(category=category, score=score, bbox=bbox), new_type))
         else:
             if j < len(new_detections):
                 detection = new_detections[j]
-                result.append(Detection(category=detection.category, score=detection.score, bbox=detection.bbox))
+                result.append(
+                    (Detection(category=detection.category, score=detection.score, bbox=detection.bbox), new_type)
+                )
 
             if i < len(current_detections) and new_type == DetectionType.CLOUD:
                 detection = current_detections[i]
-                result.append(Detection(category=detection.category, score=detection.score, bbox=detection.bbox))
+                result.append((
+                    Detection(category=detection.category, score=detection.score, bbox=detection.bbox),
+                    DetectionType.EDGE
+                ))
 
     return result

@@ -114,7 +114,7 @@ class EdgeDevice:
         frames_until_current: List[Frame] = []
         reset_frames_until_current = False
 
-        detections_to_display: List[DetectionView] = []
+        current_detections: List[Tuple[Detection, DetectionType]] = []
 
         result: List[DetectionView] = []
         while True:
@@ -124,53 +124,68 @@ class EdgeDevice:
             if frame.id == -1:
                 break
 
-            if frame_count % self.detection_rate == 0:
+            tracked = False
+            reset_tracker = False
+
+            if self.synchronous:
+                if frame_count % self.detection_rate == 0:
+                    frames_until_current.clear()  # not used if synchronous, clear here to not fill up memory
+
+                    detections = self.object_detector.edge_detect_objects(frame, current_detections, sync=True)
+                    current_detections = detections
+
+                    reset_tracker = True
+                else:
+                    tracked = True
+                    current_detections = self.object_tracker.track_objects(frame)
+            else:
+                if frame_count % self.detection_rate == 0:
+                    if not first_frame:
+                        self.object_detector.init_edge_detect_objects(frame)
+
                 if reset_frames_until_current:
                     frames_until_current.clear()
                     reset_frames_until_current = False
 
-                detected = True
-                (det_type, detections) = self.object_detector.detect_objects(frame,
-                                                                             wait=first_frame or self.synchronous)
+                detections = self.object_detector.edge_detect_objects(frame, current_detections, sync=first_frame)
 
-                tracking_result = []
-                if det_type is None:
-                    detected = False
-                    tracking_result = self.object_tracker.track_objects(frame)
-                elif self.synchronous:
-                    detections_to_display = []
-                    self.object_tracker.reset_objects()
-                    frames_until_current.clear()  # not used if synchronous, clear here to not fill up memory
-
-                    for detection in detections:
-                        self.object_tracker.add_object(frame, detection, det_type)
-                        tracking_result.append((detection, det_type))
+                if detections is None:
+                    tracked = True
+                    current_detections = self.object_tracker.track_objects(frame)
                 else:
-                    detections_to_display = []
-                    self.object_tracker.reset_objects()
                     reset_frames_until_current = True
 
                     if frames_until_current:
-                        for detection in detections:
+                        reset_tracker = False
+                        self.object_tracker.reset_objects()
+                        for (detection, det_type) in detections:
                             self.object_tracker.add_object(
                                 frames_until_current[0],
                                 detection,
                                 det_type
                             )
 
-                        tracking_result = self.object_tracker.track_objects_until_current(frames_until_current[1:],
-                                                                                          frame)
+                        current_detections = self.object_tracker.track_objects_until_current(
+                            frames_until_current[1:],
+                            frame
+                        )
                     else:
-                        tracking_result = [(detection, det_type) for detection in detections]
+                        reset_tracker = True
+                        current_detections = detections
 
-                det_views = self._convert_to_views(tracking_result, frame, tracked=not detected)
-                result.extend(det_views)
-                detections_to_display.extend(det_views)
-            else:
-                tracking_result = self.object_tracker.track_objects(frame)
-                det_views = self._convert_to_views(tracking_result, frame, tracked=True)
-                result.extend(det_views)
-                detections_to_display.extend(det_views)
+            self.object_detector.record(frame)
+            detections = self.object_detector.cloud_detect_objects(frame, current_detections)
+            if detections is not None:
+                current_detections = detections
+                reset_tracker = True
+
+            if reset_tracker:
+                self.object_tracker.reset_objects()
+                for (detection, det_type) in current_detections:
+                    self.object_tracker.add_object(frame, detection, det_type)
+
+            current_det_views = self._convert_to_views(current_detections, frame, tracked=tracked)
+            result.extend(current_det_views)
 
             frame_at = time.time()
             fps = 1 / (frame_at - prev_frame_at)
@@ -179,11 +194,10 @@ class EdgeDevice:
 
             frame_count += 1
             frames_until_current.append(frame)
-            self.object_detector.record(frame)
             first_frame = False
 
-            for received_detection in detections_to_display:
-                display_detection(frame.data, received_detection)
+            for current_detection in current_det_views:
+                display_detection(frame.data, current_detection)
 
             if annotations_available(video, annotations_path):
                 for annotation in annotations[frame.id]:

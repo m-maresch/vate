@@ -53,5 +53,11 @@ class MultiObjectTracker:
                     result.append(
                         (Detection(tracker.det_category, tracker.det_score, list(map(int, bbox))), tracker.det_type)
                     )
+                else:
+                    new_score = int(0.9 * tracker.det_score)
+                    tracker.det_score = new_score
+                    result.append(
+                        (Detection(tracker.det_category, new_score, list(map(int, tracker.det_bbox))), tracker.det_type)
+                    )
 
         return result

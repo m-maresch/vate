@@ -28,7 +28,6 @@ class EdgeCloudObjectDetector:
     max_fps: int
 
     frames_until_current: List[Frame]
-    last_cloud_detections: List[Detection]
     cloud_detection: "Future[List[Detection]]"
 
     def __init__(self, edge_server: EdgeServer, cloud_server: CloudServer, dimensions: Dimensions,
@@ -45,7 +44,6 @@ class EdgeCloudObjectDetector:
         self.cloud_tracking_stride = cloud_tracking_stride
         self.max_fps = max_fps
         self.frames_until_current = []
-        self.last_cloud_detections = []
         self.cloud_detection = Future()
         self.cloud_detection.set_result([])
 
@@ -63,12 +61,22 @@ class EdgeCloudObjectDetector:
         self.cloud_tracking_stop_event.set()
         self.cloud_tracking_process.join()
 
-    def detect_objects(self, frame: Frame, wait: bool) -> Tuple[Union[DetectionType, None], List[Detection]]:
-        edge_detections = self.edge_server.detect_objects(frame, wait)
+    def init_edge_detect_objects(self, frame: Frame):
+        self.edge_server.init_detect_objects(frame)
+
+    def edge_detect_objects(self, frame: Frame, current_detections: List[Tuple[Detection, DetectionType]], sync: bool) \
+            -> Union[List[Tuple[Detection, DetectionType]], None]:
+        edge_detections = self.edge_server.detect_objects(frame, sync)
 
         if not edge_detections:
-            return None, []
+            return None
 
+        current_detections = [detection for detection, det_type in current_detections
+                              if det_type == DetectionType.CLOUD]
+        return fuse_edge_cloud_detections(current_detections, edge_detections, DetectionType.EDGE)
+
+    def cloud_detect_objects(self, frame: Frame, current_detections: List[Tuple[Detection, DetectionType]]) \
+            -> Union[List[Tuple[Detection, DetectionType]], None]:
         current_cloud_detections = []
         if self.cloud_tracking_socket.poll(1, zmq.POLLIN):
             current_cloud_detections = self.cloud_tracking_socket.recv_pyobj(zmq.NOBLOCK)
@@ -80,13 +88,11 @@ class EdgeCloudObjectDetector:
             self.executor.submit(self._add_cloud_tracking_task, scaled_cloud_detections, frame)
 
         if current_cloud_detections:
-            detections = fuse_edge_cloud_detections(edge_detections, current_cloud_detections,
-                                                    DetectionType.CLOUD)
-            self.last_cloud_detections = current_cloud_detections
-            return DetectionType.CLOUD, detections
-        else:
-            detections = fuse_edge_cloud_detections(self.last_cloud_detections, edge_detections, DetectionType.EDGE)
-            return DetectionType.EDGE, detections
+            current_detections = [detection for detection, det_type in current_detections
+                                  if det_type == DetectionType.EDGE]
+            return fuse_edge_cloud_detections(current_detections, current_cloud_detections, DetectionType.CLOUD)
+
+        return None
 
     def record(self, frame: Frame):
         self.frames_until_current.append(frame)
@@ -96,7 +102,6 @@ class EdgeCloudObjectDetector:
 
     def reset(self):
         self.frames_until_current.clear()
-        self.last_cloud_detections.clear()
 
     def _scale_cloud_to_edge(self, detections: List[Detection]) -> List[Detection]:
         return [

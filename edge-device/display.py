@@ -9,14 +9,16 @@ FONT = cv.FONT_HERSHEY_SIMPLEX
 
 def display_detection(frame, detection: DetectionView):
     (x, y, w, h) = [detection.x, detection.y, detection.w, detection.h]
-    if not detection.tracked:
-        category_name = to_category_name(detection.category)
-        color = color_det(detection.type)
-        cv.rectangle(frame, (x, y), (x + w, y + h), color, 3)
-        cv.putText(frame, f"{category_name} {detection.score}%", (x, y - 10), FONT, 0.5, color, 2)
-    else:
-        color = color_tracked()
-        cv.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+    category_name = to_category_name(detection.category)
+
+    color = color_det(detection.type)
+    thickness = 3
+    if detection.tracked:
+        color = color_tracked(detection.type)
+        thickness = 2
+
+    cv.rectangle(frame, (x, y), (x + w, y + h), color, thickness)
+    cv.putText(frame, f"{category_name} {detection.score}%", (x, y - 10), FONT, 0.5, color_det(detection.type), 2)
 
 
 def display_annotation(frame, annotation: AnnotationView):

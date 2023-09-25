@@ -39,10 +39,6 @@ class JetsonPredictor:
         original_height, original_width, _ = image.shape
         image = cv.resize(image, (self.input_width, self.input_height), interpolation=cv.INTER_LINEAR)
 
-        cv.imshow('det frame', image)
-        if cv.waitKey(1) == ord('q'):
-            pass
-
         bgr_image = cudaFromNumpy(image, isBGR=True)
         rgb_image = cudaAllocMapped(width=bgr_image.width, height=bgr_image.height, format='rgb8')
         cudaConvertColor(bgr_image, rgb_image)
