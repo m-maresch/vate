@@ -107,24 +107,27 @@ class EdgeDevice:
 
     def _process_video(self, video: Union[str, None],
                        annotations_path: Union[str, None]) -> Tuple[List[DetectionView], List[float]]:
-        images: List[Image] = []
-        annotations: AnnotationsByImage = dict()
-        if annotations_available(video, annotations_path):
-            (images, annotations) = load_annotations(video, annotations_path)
-
-        frames = get_frames(video, images, self.dimensions, self.max_fps)
         frame_count = 0
         prev_frame_at = 0.0
         first_frame = True
 
         fps_records: List[float] = []
 
+        edge_detection_start = 0.0
+        edge_detection_times = []
+
         frames_until_current: List[Frame] = []
         reset_frames_until_current = False
 
         current_detections: DetectionsWithTypes = []
-
         result: List[DetectionView] = []
+
+        images: List[Image] = []
+        annotations: AnnotationsByImage = dict()
+        if annotations_available(video, annotations_path):
+            (images, annotations) = load_annotations(video, annotations_path)
+
+        frames = get_frames(video, images, self.dimensions, self.max_fps)
         while True:
             start = time.time()
 
@@ -137,17 +140,23 @@ class EdgeDevice:
 
             if self.sync:
                 if frame_count % self.detection_rate == 0:
-                    detections = self.object_detector.get_edge_object_detections_sync(frame, current_detections)
+                    edge_detection_start = time.time()
+                    detections = self.object_detector.request_edge_detections_sync(frame, current_detections)
+                    edge_detection_times.append(time.time() - edge_detection_start)
+
                     current_detections = detections
                     reset_tracker = True
                 else:
                     tracked = True
                     current_detections = self.object_tracker.track_objects(frame)
             else:
-                if frame_count % self.detection_rate == 0 and not first_frame:
-                    ok = self.object_detector.request_edge_object_detections_async(frame)
+                if not first_frame:
+                    ok = self.object_detector.request_edge_detections_async(frame)
                     if ok:
                         reset_frames_until_current = True
+
+                        edge_detection_times.append(time.time() - edge_detection_start)
+                        edge_detection_start = time.time()
 
                 if reset_frames_until_current:
                     frames_until_current.clear()
@@ -155,11 +164,13 @@ class EdgeDevice:
                 frames_until_current.append(frame)
 
                 if first_frame:
-                    detections = self.object_detector.get_edge_object_detections_sync(frame, current_detections)
+                    detections = self.object_detector.request_edge_detections_sync(frame, current_detections)
+
                     current_detections = detections
                     reset_tracker = True
                 else:
-                    detections = self.object_detector.get_edge_object_detections_async(current_detections)
+                    block = len(frames_until_current) >= self.detection_rate
+                    detections = self.object_detector.get_edge_detections(current_detections, block)
 
                     if detections is None:
                         tracked = True
@@ -180,7 +191,7 @@ class EdgeDevice:
                         )
 
             self.object_detector.record(frame)
-            detections = self.object_detector.get_cloud_object_detections_async(frame, current_detections)
+            detections = self.object_detector.process_cloud_detections(frame, current_detections)
             if detections is not None:
                 current_detections = detections
                 reset_tracker = True
@@ -217,6 +228,10 @@ class EdgeDevice:
                 break
 
             print(f"Frame took: {end - start}s, with wait: {time.time() - start}s")
+
+        edge_detection_times = edge_detection_times if self.sync else edge_detection_times[1:]
+        average_edge_detection_time = sum(edge_detection_times) / len(edge_detection_times)
+        print(f"Edge detections took: {edge_detection_times} (average: {average_edge_detection_time}s)")
 
         self.all_detections.extend(result)
         self.all_fps.extend(fps_records)

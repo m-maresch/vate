@@ -61,19 +61,20 @@ class EdgeCloudObjectDetector:
         self.cloud_tracking_stop_event.set()
         self.cloud_tracking_process.join()
 
-    def get_edge_object_detections_sync(self,
-                                        frame: Frame,
-                                        current_detections: DetectionsWithTypes) -> Union[DetectionsWithTypes, None]:
-        self.request_edge_object_detections_async(frame)
-        return self.get_edge_object_detections_async(current_detections, timeout=60000)
+    def request_edge_detections_sync(self,
+                                     frame: Frame,
+                                     current_detections: DetectionsWithTypes) -> Union[DetectionsWithTypes, None]:
+        self.request_edge_detections_async(frame)
+        return self.get_edge_detections(current_detections, block=True)
 
-    def request_edge_object_detections_async(self, frame: Frame) -> bool:
+    def request_edge_detections_async(self, frame: Frame) -> bool:
         return self.edge_server.send_frame(frame)
 
-    def get_edge_object_detections_async(self,
-                                         current_detections: DetectionsWithTypes,
-                                         timeout: int = 3) -> Union[DetectionsWithTypes, None]:
-        edge_detections = self.edge_server.receive_object_detections(timeout)
+    def get_edge_detections(self,
+                            current_detections: DetectionsWithTypes,
+                            block: bool) -> Union[DetectionsWithTypes, None]:
+        timeout = 60000 if block else 1
+        edge_detections = self.edge_server.receive_detections(timeout)
 
         if edge_detections is None:
             return None
@@ -82,9 +83,9 @@ class EdgeCloudObjectDetector:
                               if det_type == DetectionType.CLOUD]
         return fuse_edge_cloud_detections(current_detections, edge_detections, DetectionType.EDGE)
 
-    def get_cloud_object_detections_async(self,
-                                          frame: Frame,
-                                          current_detections: DetectionsWithTypes) -> Union[DetectionsWithTypes, None]:
+    def process_cloud_detections(self,
+                                 frame: Frame,
+                                 current_detections: DetectionsWithTypes) -> Union[DetectionsWithTypes, None]:
         tracked_cloud_detections = []
         if self.cloud_tracking_socket.poll(1, zmq.POLLIN):
             tracked_cloud_detections = self.cloud_tracking_socket.recv_pyobj(zmq.NOBLOCK)

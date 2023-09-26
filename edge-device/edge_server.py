@@ -45,7 +45,7 @@ class EdgeServer:
             return True
         return False
 
-    def receive_object_detections(self, timeout: int) -> Union[List[Detection], None]:
+    def receive_detections(self, timeout: int) -> Union[List[Detection], None]:
         if not self.socket.poll(timeout, zmq.POLLIN):
             return None
 
