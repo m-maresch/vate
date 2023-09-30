@@ -18,7 +18,7 @@ def main(videos: Union[str, None], annotations_path: Union[str, None], detection
         cloud_processing_width=1333,
         cloud_processing_height=800
     )
-    max_fps = 30
+    max_fps = 24
 
     object_tracker = MultiObjectTracker(min_score=20)
 

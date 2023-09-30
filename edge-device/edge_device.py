@@ -64,7 +64,7 @@ class EdgeDevice:
         cv.destroyAllWindows()
 
         fps_avg = int(sum(self.all_fps) / len(self.all_fps))
-        fps_bins = np.append(np.arange(0, self.max_fps + 1, step=5), np.inf)
+        fps_bins = np.append(np.arange(self.max_fps + 1), np.inf)
         fps_histogram = np.histogram(self.all_fps, bins=fps_bins)
 
         print(f"Total FPS average: {fps_avg}")
