@@ -20,7 +20,7 @@ def main(videos: Union[str, None], annotations_path: Union[str, None], detection
     )
     max_fps = 24
 
-    object_tracker = MultiObjectTracker(min_score=20)
+    object_tracker = MultiObjectTracker(min_score=20, drop=False)
 
     edge_server = EdgeServer(ipc)
     edge_server.connect()

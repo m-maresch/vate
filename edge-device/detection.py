@@ -83,18 +83,17 @@ class EdgeCloudObjectDetector:
                               if det_type == DetectionType.CLOUD]
         return fuse_edge_cloud_detections(current_detections, edge_detections, DetectionType.EDGE)
 
-    def process_cloud_detections(self,
-                                 frame: Frame,
-                                 current_detections: DetectionsWithTypes) -> Union[DetectionsWithTypes, None]:
-        tracked_cloud_detections = []
-        if self.cloud_tracking_socket.poll(1, zmq.POLLIN):
-            tracked_cloud_detections = self.cloud_tracking_socket.recv_pyobj(zmq.NOBLOCK)
-
+    def process_cloud_detections(self, frame: Frame):
         if self.cloud_detection.done():
             cloud_detections = self.cloud_detection.result()
             scaled_cloud_detections = self._scale_cloud_to_edge(cloud_detections)
             self.cloud_detection = self.executor.submit(self._cloud_detect_objects, frame)
             self.executor.submit(self._add_cloud_tracking_task, scaled_cloud_detections, frame)
+
+    def get_cloud_detections(self, current_detections: DetectionsWithTypes) -> Union[DetectionsWithTypes, None]:
+        tracked_cloud_detections = []
+        if self.cloud_tracking_socket.poll(1, zmq.POLLIN):
+            tracked_cloud_detections = self.cloud_tracking_socket.recv_pyobj(zmq.NOBLOCK)
 
         if not tracked_cloud_detections:
             return None

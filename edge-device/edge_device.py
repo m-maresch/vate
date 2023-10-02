@@ -191,7 +191,11 @@ class EdgeDevice:
                         )
 
             self.object_detector.record(frame)
-            detections = self.object_detector.process_cloud_detections(frame, current_detections)
+
+            if frame_count % 5 == 0:
+                self.object_detector.process_cloud_detections(frame)
+
+            detections = self.object_detector.get_cloud_detections(current_detections)
             if detections is not None:
                 current_detections = detections
                 reset_tracker = True

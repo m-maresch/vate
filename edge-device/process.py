@@ -30,7 +30,7 @@ def track_objects_until_current_worker(stop_event: Event):
             print(f"Cloud tracking num frames: {len(frames_until_current) + 1}")
             start = time.time()
 
-            object_tracker = MultiObjectTracker(min_score=min_score)
+            object_tracker = MultiObjectTracker(min_score=min_score, drop=True)
             for detection in detections:
                 object_tracker.add_object(frames_until_current[0], detection, DetectionType.CLOUD)
 

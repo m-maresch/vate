@@ -7,19 +7,22 @@ from model import TrackerRecord, Frame, Detection, DetectionType, DetectionsWith
 class MultiObjectTracker:
     trackers: List[TrackerRecord]
     min_score: int
+    drop: bool
 
-    def __init__(self, min_score: int):
+    def __init__(self, min_score: int, drop: bool):
         self.trackers = []
         self.min_score = min_score
+        self.drop = drop
 
     def reset_objects(self):
         self.trackers = []
 
     def add_object(self, frame: Frame, detection: Detection, det_type: DetectionType):
         if detection.score < self.min_score:
-            self.trackers.append(
-                TrackerRecord(None, detection.bbox, detection.score, detection.category, det_type)
-            )
+            if not self.drop:
+                self.trackers.append(
+                    TrackerRecord(None, detection.bbox, detection.score, detection.category, det_type)
+                )
             return
 
         tracker = cv.legacy.TrackerMOSSE_create()
@@ -53,7 +56,7 @@ class MultiObjectTracker:
                     result.append(
                         (Detection(tracker.det_category, tracker.det_score, list(map(int, bbox))), tracker.det_type)
                     )
-                else:
+                elif not self.drop:
                     new_score = int(decay * tracker.det_score)
                     tracker.det_score = new_score
                     result.append(
