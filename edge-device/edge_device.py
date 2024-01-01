@@ -1,5 +1,7 @@
 import cv2 as cv
+import dataclasses
 import glob
+import json
 import numpy as np
 import time
 from typing import Union, List, Tuple
@@ -61,6 +63,10 @@ class EdgeDevice:
         if annotations_available(videos, annotations_path):
             evaluate_detections(self.all_detections, annotations_path)
 
+            print("Creating all_detections.json")
+            with open('all_detections.json', 'w') as f:
+                json.dump([dataclasses.asdict(detection) for detection in self.all_detections], f, default=str)
+
         cv.destroyAllWindows()
 
         fps_avg = int(sum(self.all_fps) / len(self.all_fps))
@@ -97,10 +103,8 @@ class EdgeDevice:
 
         if mAP_per_video:
             print(f"All mAPs: {mAP_per_video}")
-            print(f"Average mAP: {sum(mAP_per_video) / len(mAP_per_video)}")
         if mAP_50_per_video:
             print(f"All mAP_50s: {mAP_50_per_video}")
-            print(f"Average mAP_50: {sum(mAP_50_per_video) / len(mAP_50_per_video)}")
         print(f"All FPS averages: {fps_per_video}")
 
         print()

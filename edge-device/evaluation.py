@@ -25,8 +25,9 @@ def evaluate_detections(detections: List[DetectionView], annotations_path: str) 
         ) for detection in detections
     ]
 
-    img_ids_start = results[0]['image_id']
-    img_ids_end = results[-1]['image_id']
+    img_ids = [result['image_id'] for result in results]
+    img_ids_start = min(img_ids)
+    img_ids_end = max(img_ids)
 
     coco_gt = COCO(annotations_path)
     coco_dt = coco_gt.loadRes(results)
