@@ -43,7 +43,7 @@ def create_accuracy_plot(ax):
     ax.set_title('Accuracy by combination of mode and cloud model')
     ax.set_xticks(x + width / 2, cloud_models)
     ax.legend(loc='upper left', ncols=3)
-    ax.set_ylim(0, 0.12)
+    ax.set_ylim(0, 0.16)
 
 
 def create_fusion_plot(ax):
@@ -60,7 +60,7 @@ def create_fusion_plot(ax):
     ax.set_title('Comparison of edge-cloud fusion algorithms')
     ax.set_xticks(x + width / 2, cloud_models)
     ax.legend(loc='upper left', ncols=3)
-    ax.set_ylim(0, 0.12)
+    ax.set_ylim(0, 0.16)
 
 
 create_accuracy_plot(accuracy_ax)

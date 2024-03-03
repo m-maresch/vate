@@ -43,8 +43,9 @@ frq_swin_transformer_async, edges_swin_transformer_async = (
 fig, (
     (ax_faster_rcnn_sync, ax_swin_transformer_sync),
     (ax_faster_rcnn_async, ax_swin_transformer_async),
-    (ax_faster_rcnn_diff, ax_swin_transformer_diff)
-) = (plt.subplots(3, 2, layout="constrained"))
+    (ax_faster_rcnn_diff, ax_swin_transformer_diff),
+    (ax_std, _),
+) = (plt.subplots(4, 2, layout="constrained"))
 
 
 def preprocess(frq, edges):
@@ -106,6 +107,37 @@ def create_var_std_plot(ax, sync_frq, async_frq, edges):
     ax.set_xticks(x + width / 2, measures)
     ax.legend(loc='upper left', ncols=3)
     ax.set_ylim(0, 100)
+    ax.set_ylabel('FPS')
+
+
+def create_std_plot(ax, sync_frq_1, async_frq_1, edges_1, label_1, sync_frq_2, async_frq_2, edges_2, label_2):
+    _, sync_std_1 = var_std(sync_frq_1[:-1], edges_1)
+    _, async_std_1 = var_std(async_frq_1[:-1], edges_1)
+
+    _, sync_std_2 = var_std(sync_frq_2[:-1], edges_2)
+    _, async_std_2 = var_std(async_frq_2[:-1], edges_2)
+
+    modes = {
+        'Synchronous mode': (sync_std_1, sync_std_2),
+        'Asynchronous mode': (async_std_1, async_std_2),
+    }
+
+    x = np.arange(2)
+    width = 0.4
+
+    ax.set_prop_cycle(color=['firebrick', 'salmon'])
+
+    multiplier = 0
+    for mode, measurement in modes.items():
+        offset = width * multiplier
+        rects = ax.bar(x + offset, measurement, width, label=mode)
+        ax.bar_label(rects, padding=3)
+        multiplier += 1
+
+    ax.set_xticks(x + width / 2, [label_1, label_2])
+    ax.legend(loc='upper left', ncols=3)
+    ax.set_ylim(0, 15)
+    ax.set_ylabel('FPS')
 
 
 ax_faster_rcnn_sync.set_title('Synchronous mode histogram - Faster RCNN')
@@ -115,6 +147,8 @@ ax_faster_rcnn_diff.set_title('Comparison of modes - Faster RCNN')
 ax_swin_transformer_sync.set_title('Synchronous mode histogram - Swin transformer')
 ax_swin_transformer_async.set_title('Asynchronous mode histogram - Swin transformer')
 ax_swin_transformer_diff.set_title('Comparison of modes - Swin transformer')
+
+ax_std.set_title('FPS Std Dev by combination of mode and cloud model')
 
 frq_faster_rcnn_sync, edges_faster_rcnn_sync = preprocess(frq_faster_rcnn_sync, edges_faster_rcnn_sync)
 frq_faster_rcnn_async, edges_faster_rcnn_async = preprocess(frq_faster_rcnn_async, edges_faster_rcnn_async)
@@ -131,6 +165,9 @@ create_histogram(ax_swin_transformer_async, frq_swin_transformer_async, edges_sw
 create_var_std_plot(ax_faster_rcnn_diff, frq_faster_rcnn_sync, frq_faster_rcnn_async, edges_faster_rcnn_sync)
 create_var_std_plot(ax_swin_transformer_diff, frq_swin_transformer_sync, frq_swin_transformer_async,
                     edges_swin_transformer_sync)
+
+create_std_plot(ax_std, frq_faster_rcnn_sync, frq_faster_rcnn_async, edges_faster_rcnn_sync, "Faster RCNN",
+                frq_swin_transformer_sync, frq_swin_transformer_async, edges_swin_transformer_sync, "Swin transformer")
 
 engine = fig.get_layout_engine()
 engine.set(rect=(0.1, 0.1, 0.8, 0.8))
