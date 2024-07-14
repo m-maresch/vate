@@ -1,13 +1,17 @@
 # VATE: Edge-Cloud System for Object Detection in Real-Time Video Streams
 
-This repository contains the source code of the VATE system.
+This repository contains the source code of the VATE system, which improved the state of the art given by a Microsoft
+Research system by up to 27.5%.
 
 The following clip shows a video from the
 [VisDrone-VID2019 dataset](https://github.com/VisDrone/VisDrone-Dataset) being processed by VATE:
 
 https://github.com/m-maresch/vate/assets/22080287/9e947f7e-2ff0-4d84-9645-a178d4008db8
 
-All details on VATE can be found in the paper (more information on this will be added here soon).
+All details on VATE can be found in
+the [paper](https://dsg.tuwien.ac.at/team/snastic/publications/ICFEC__Maresch_VATE_Object_Detection.pdf).
+
+Publication: IEEE International Conference on Fog and Edge Computing ([ICFEC 2024](https://icfec2024.ontariotechu.ca/))
 
 Abstract:
 > In the realm of edge intelligence, emerging video analytics applications are often based on resource constrained edge
